@@ -1,0 +1,23 @@
+# Fichier: mon_projet_prevision/.gitignore
+
+### Général ###
+.env
+*.env
+.vscode/
+.idea/
+*.DS_Store
+
+### Python ###
+service-ia-python/venv/
+service-ia-python/**/__pycache__/
+service-ia-python/**/*.pyc
+venv/
+
+### Node.js ###
+backend-express/node_modules/
+frontend-react/node_modules/
+npm-debug.log*
+yarn-error.log
+
+### AutoGluon ###
+service-ia-python/AutogluonModels/

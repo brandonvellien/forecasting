@@ -1,0 +1,25 @@
+# Fichier: mon_projet_prevision/docker-compose.yml
+version: '3.8'
+
+services:
+  # Définition de notre service IA en Python
+  service-ia:
+    build: ./service-ia-python
+    image: mon-service-ia
+    volumes:
+      - ./service-ia-python/AutogluonModels:/app/AutogluonModels
+      - ./service-ia-python/data:/app/data
+    # Pas besoin de 'ports' ici, seul le backend lui parle sur le réseau privé
+
+  # Définition de notre backend en Express.js
+  backend:
+    build: ./backend-express
+    image: mon-backend-express
+    ports:
+      - "3001:3001" # On expose le port 3001 sur notre Mac
+    environment:
+      # C'est ici la magie ! Le backend peut maintenant appeler l'autre service
+      # en utilisant son nom, 'service-ia'.
+      - IA_SERVICE_URL=http://service-ia:8000
+    depends_on:
+      - service-ia # Le backend ne démarre que quand le service IA est prêt

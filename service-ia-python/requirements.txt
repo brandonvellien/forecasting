@@ -1,0 +1,9 @@
+# Fichier: service-ia-python/requirements.txt
+
+# On spécifie les librairies principales et les contraintes connues
+numpy<2.0
+pandas
+# autogluon.timeseries va installer autogluon.core, common, etc.
+autogluon.timeseries
+# fastapi[all] inclut le serveur uvicorn
+fastapi[all]
