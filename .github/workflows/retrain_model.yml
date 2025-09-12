@@ -2,7 +2,6 @@
 name: Entraînement des Modèles
 
 on:
-  # Permet de le lancer à la main depuis l'onglet "Actions" de GitHub
   workflow_dispatch:
     inputs:
       category_id:
@@ -12,7 +11,7 @@ on:
 
 jobs:
   training:
-    runs-on: ubuntu-latest # Le robot utilisera une machine Linux temporaire
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout du code
         uses: actions/checkout@v3
@@ -24,12 +23,18 @@ jobs:
 
       - name: Installation des dépendances
         run: |
-          cd service-ia-python
-          pip install -r requirements.txt
+          # On installe les paquets sensibles en premier avec des versions fixes
+          pip install "numpy<2.0" protobuf==3.20.3
+          # On installe le reste depuis le fichier requirements
+          pip install -r service-ia-python/requirements.txt
       
+      # --- BLOC CORRIGÉ ---
       - name: Lancer l'entraînement
         env:
-          # On passe l'adresse du serveur MLflow en secret pour la sécurité
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
         run: |
-          python3 service-ia-python/app/train.py --category ${{ github.event.inputs.category_id }}
+          # On se place dans le dossier du service AVANT de lancer le script
+          cd service-ia-python
+          
+          # Maintenant on lance le script depuis cet emplacement
+          python3 app/train.py --category ${{ github.event.inputs.category_id }}
