@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/retrain_model.yml
+# Fichier: .github/workflows/retrain_model.yml (Version Finale et Robuste)
 name: Entraînement des Modèles
 
 on:
@@ -12,6 +12,12 @@ on:
 jobs:
   training:
     runs-on: ubuntu-latest
+    
+    # --- AJOUT CRUCIAL : Définir le répertoire de travail ---
+    defaults:
+      run:
+        working-directory: ./service-ia-python
+
     steps:
       - name: Checkout du code
         uses: actions/checkout@v3
@@ -23,18 +29,15 @@ jobs:
 
       - name: Installation des dépendances
         run: |
-          # On installe les paquets sensibles en premier avec des versions fixes
           pip install "numpy<2.0" protobuf==3.20.3
-          # On installe le reste depuis le fichier requirements
-          pip install -r service-ia-python/requirements.txt
+          pip install -r requirements.txt
       
-      # --- BLOC CORRIGÉ ---
+      # --- Étape de débogage (très utile) ---
+      - name: Vérifier la structure des fichiers
+        run: ls -R
+      
       - name: Lancer l'entraînement
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
         run: |
-          # On se place dans le dossier du service AVANT de lancer le script
-          cd service-ia-python
-          
-          # Maintenant on lance le script depuis cet emplacement
           python3 app/train.py --category ${{ github.event.inputs.category_id }}
