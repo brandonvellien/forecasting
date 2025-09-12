@@ -24,8 +24,8 @@ jobs:
 
       - name: Installation des dépendances
         run: |
-          pip install --force-reinstall --no-cache-dir "mlflow[autogluon]" protobuf==3.20.3 "numpy<2.0"
-          pip install -r service-ia-python/requirements.txt
+          cd service-ia-python
+          pip install -r requirements.txt
       
       - name: Lancer l'entraînement
         env:

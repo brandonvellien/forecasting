@@ -1,13 +1,26 @@
-# Fichier: train.py (pour la catégorie category1_01)
 
 import pandas as pd
 import numpy as np
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from sklearn.metrics import mean_absolute_error
 import mlflow
-import mlflow.autogluon
+from mlflow.pyfunc import PythonModel
+import joblib
 import os
 import argparse
+
+# --- Wrapper PyFunc pour rendre le modèle AutoGluon compatible avec MLflow ---
+class AutoGluonPyFuncModel(PythonModel):
+    def load_context(self, context):
+        """Charge le modèle depuis le chemin sauvegardé."""
+        self.predictor = TimeSeriesPredictor.load(context.artifacts["predictor_path"])
+
+    def predict(self, context, model_input):
+        """Effectue la prédiction."""
+        # On s'assure que l'entrée est au bon format
+        if not isinstance(model_input, TimeSeriesDataFrame):
+            model_input = TimeSeriesDataFrame(model_input)
+        return self.predictor.predict(model_input)
 
 # --- FONCTIONS UTILITAIRES ---
 def smape(y_true, y_pred):
@@ -33,23 +46,21 @@ MODELS_CONFIG = {
 
 def train_model(unique_id: str):
     """
-    Entraîne le modèle champion pour une catégorie et enregistre les résultats
-    de l'expérience avec MLflow.
+    Entraîne le modèle, l'évalue, et le sauvegarde sur MLflow en utilisant un wrapper PyFunc.
     """
     print(f"--- Début de l'entraînement pour {unique_id} ---")
     
     if unique_id not in MODELS_CONFIG:
-        raise ValueError(f"ID non valide. '{unique_id}' n'est pas dans la configuration.")
+        raise ValueError(f"ID non valide.")
     
     config = MODELS_CONFIG[unique_id]
 
     mlflow.set_experiment("Prédictions Ligne Produit 1")
-    with mlflow.start_run(run_name=f"Training_TFT_{unique_id}") as run:
+    with mlflow.start_run(run_name=f"Training_TFT_pyfunc_{unique_id}") as run:
         
-        print("Enregistrement des paramètres sur MLflow...")
         mlflow.log_params(config)
         
-        # 1. Préparation des données
+        # --- 1. Préparation des données ---
         print("Préparation des données...")
         df_ventes = pd.read_csv(config["data_source"], parse_dates=['timestamp'])
         df_cat = df_ventes[df_ventes['item_id'] == config["category_id_in_file"]].copy()
@@ -67,40 +78,40 @@ def train_model(unique_id: str):
         cutoff_date = data.index.get_level_values('timestamp').max() - pd.to_timedelta(prediction_length * 7, unit='D')
         train_data = data[data.index.get_level_values('timestamp') <= cutoff_date]
         test_data = data
-        print("✅ Données finales prêtes.")
-
-        # 2. Entraînement
-        print("\nLancement de l'entraînement ciblé sur TFT...")
-        tft_powerful_params = {
+        
+        # --- 2. Entraînement ---
+        print("Lancement de l'entraînement AutoGluon...")
+        tft_params = {
             'context_length': prediction_length * 3, 'hidden_dim': 64,
             'dropout_rate': 0.1, 'max_epochs': 120, 'early_stopping_patience': 20
         }
-        mlflow.log_params(tft_powerful_params)
+        mlflow.log_params(tft_params)
+        
+        # Le chemin local où le modèle sera temporairement sauvegardé
+        local_model_path = f"AutogluonModels/temp_{unique_id}"
         
         predictor = TimeSeriesPredictor(
-            prediction_length=prediction_length,
-            path=f"AutogluonModels/ts_TFT_ONLY_{config['category_id_in_file']}",
-            target=config["target_column"],
-            eval_metric="mean_wQuantileLoss",
+            prediction_length=prediction_length, path=local_model_path,
+            target=config["original_target_col"], eval_metric="mean_wQuantileLoss",
             quantile_levels=[0.1, 0.5, 0.9]
         )
-        predictor.fit(train_data, hyperparameters={'TemporalFusionTransformer': tft_powerful_params})
+        predictor.fit(train_data, hyperparameters={'TemporalFusionTransformer': tft_params})
 
-        # 3. Évaluation et Logging des résultats
-        print("\nÉvaluation du modèle...")
+        # --- 3. Évaluation ---
+        print("Évaluation du modèle...")
         predictions = predictor.predict(train_data)
-        y_test = test_data.tail(prediction_length)[config["target_column"]]
+        y_test = test_data.tail(prediction_length)[config["original_target_col"]]
         y_pred = predictions['0.5']
         mae_score = mean_absolute_error(y_test, y_pred)
-        
-        print(f"MAE obtenue : {mae_score:.2f}")
         mlflow.log_metric("mae", mae_score)
         
-        # 4. Sauvegarde du modèle sur MLflow
-        print("Sauvegarde du modèle sur MLflow...")
-        mlflow.autogluon.log_model(
-            predictor,
+        # --- 4. Sauvegarde avec le wrapper PyFunc ---
+        print("Sauvegarde du modèle sur MLflow avec le wrapper PyFunc...")
+        mlflow.pyfunc.log_model(
             artifact_path=f"model_{unique_id}",
+            python_model=AutoGluonPyFuncModel(),
+            # On dit à MLflow d'inclure le dossier du modèle sauvegardé
+            artifacts={'predictor_path': local_model_path},
             registered_model_name=f"sales-forecast-{unique_id}"
         )
         print(f"--- Entraînement pour {unique_id} terminé. ---")
@@ -108,13 +119,13 @@ def train_model(unique_id: str):
 
 # --- POINT D'ENTRÉE POUR L'EXÉCUTION ---
 if __name__ == "__main__":
-    # Configuration de l'adresse du serveur MLflow depuis une variable d'environnement ou en dur
-    IP_EXTERNE_DE_VOTRE_VM = os.environ.get("MLFLOW_TRACKING_URI", "http://VOTRE_IP_EXTERNE_ICI:5000").replace("http://", "").split(":")[0]
-    mlflow.set_tracking_uri(f"http://{IP_EXTERNE_DE_VOTRE_VM}:5000")
+    mlflow_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if mlflow_tracking_uri:
+        mlflow.set_tracking_uri(mlflow_tracking_uri)
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--category", required=True, help="ID unique de la catégorie à entraîner (ex: ligne1_category1_01)")
+    parser.add_argument("--category", required=True, help="ID unique de la catégorie à entraîner")
     args = parser.parse_args()
     
     run_id = train_model(args.category)
-    print(f"\n✅ Succès ! Retrouvez cette exécution dans l'interface MLflow (http://{IP_EXTERNE_DE_VOTRE_VM}:5000) avec l'ID : {run_id}")
+    print(f"\n✅ Succès ! Retrouvez cette exécution dans MLflow avec l'ID : {run_id}")
