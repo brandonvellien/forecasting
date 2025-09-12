@@ -1,0 +1,35 @@
+# Fichier: .github/workflows/retrain_model.yml
+name: Entraînement des Modèles
+
+on:
+  # Permet de le lancer à la main depuis l'onglet "Actions" de GitHub
+  workflow_dispatch:
+    inputs:
+      category_id:
+        description: "L'ID unique du modèle à entraîner (ex: ligne1_category1_01)"
+        required: true
+        default: 'ligne1_category1_01'
+
+jobs:
+  training:
+    runs-on: ubuntu-latest # Le robot utilisera une machine Linux temporaire
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      - name: Mise en place de Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Installation des dépendances
+        run: |
+          pip install --force-reinstall --no-cache-dir "mlflow[autogluon]" protobuf==3.20.3 "numpy<2.0"
+          pip install -r service-ia-python/requirements.txt
+      
+      - name: Lancer l'entraînement
+        env:
+          # On passe l'adresse du serveur MLflow en secret pour la sécurité
+          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        run: |
+          python3 service-ia-python/app/train.py --category ${{ github.event.inputs.category_id }}
