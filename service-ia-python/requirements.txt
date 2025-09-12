@@ -8,3 +8,4 @@ autogluon.timeseries
 # fastapi[all] inclut le serveur uvicorn
 fastapi[all]
 joblib
+mlflow
