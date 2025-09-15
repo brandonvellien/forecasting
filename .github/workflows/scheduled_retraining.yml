@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et robuste)
+# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et combinée)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
@@ -8,7 +8,7 @@ on:
     inputs:
       category_id:
         description: "ID du modèle à entraîner"
-        required: true
+        required: false # On le met à false car on gère la valeur par défaut
         default: 'ligne1_category1_01'
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
         uses: 'google-github-actions/setup-gcloud@v2'
 
       - name: Configurer Docker pour Google Artifact Registry
-        run: gcloud auth configure-docker europe-west1-docker.pkg.dev
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Build et Push de l'image d'entraînement
         run: |
@@ -38,13 +38,15 @@ jobs:
 
       - name: Lancer le job d'entraînement sur Vertex AI
         run: |
-          # On prépare l'URI de l'image Docker
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
-
-          # On crée le fichier de configuration pour le job Vertex AI.
-          # Cette méthode est la plus fiable.
-          cat <<EOF > job.yaml
-          displayName: training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}
+          
+          # Gestion de la valeur par défaut (excellente idée de Claude)
+          CATEGORY_ID="${{ github.event.inputs.category_id || 'ligne1_category1_01' }}"
+          
+          JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
+          
+          # On crée le fichier de configuration SANS le displayName
+          cat <<EOF > config.yaml
           jobSpec:
             workerPoolSpecs:
             - machineSpec:
@@ -53,16 +55,22 @@ jobs:
                 acceleratorCount: 1
               replicaCount: 1
               containerSpec:
-                imageUri: ${IMAGE_URI}
+                imageUri: $IMAGE_URI
                 args:
                 - --category
-                - ${{ github.event.inputs.category_id }}
+                - $CATEGORY_ID
                 env:
                 - name: MLFLOW_TRACKING_URI
                   value: "${{ secrets.MLFLOW_TRACKING_URI }}"
           EOF
-
-          # On lance le job en utilisant le fichier de configuration
+          
+          # Étape de débogage (excellente idée de Claude)
+          echo "--- Contenu de config.yaml ---"
+          cat config.yaml
+          echo "-----------------------------"
+          
+          # On lance le job en passant le display-name en argument, comme l'exige gcloud
           gcloud ai custom-jobs create \
             --region=us-east1 \
-            --config=job.yaml
+            --display-name=$JOB_NAME \
+            --config=config.yaml
