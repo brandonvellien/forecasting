@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml
+# Fichier: .github/workflows/scheduled_retraining.yml efrr
 
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
