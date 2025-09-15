@@ -1,0 +1,38 @@
+# Fichier: .github/workflows/scheduled_retraining.yml
+
+name: Entraînement Mensuel Automatisé sur Vertex AI
+
+on:
+  schedule:
+    - cron: '0 2 1 * *' # Tous les 1ers du mois à 2h du matin
+  workflow_dispatch: # Permet un lancement manuel
+    inputs:
+      category_id:
+        description: "ID du modèle à entraîner"
+        required: true
+        default: 'ligne1_category1_01'
+
+jobs:
+  train-on-vertex-ai:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      - name: Authentification à Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Mise en place de gcloud CLI
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: Lancer le job d'entraînement sur Vertex AI
+        run: |
+          gcloud ai custom-jobs create \
+            --region=us-east1 \ # Mettez votre région
+            --display-name="training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}" \
+            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/sales-forecasting-trainer \
+            --args=--category,${{ github.event.inputs.category_id }} \
+            --env-vars=MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
