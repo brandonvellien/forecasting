@@ -67,6 +67,6 @@ jobs:
           
           # On lance le job dans la région où les quotas sont probablement disponibles
           gcloud ai custom-jobs create \
-            --region=europe-west1 \
+            --region=us-east1 \
             --display-name=$JOB_NAME \
             --config=config.yaml
