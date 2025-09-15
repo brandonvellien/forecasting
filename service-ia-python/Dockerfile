@@ -1,24 +1,21 @@
-# Fichier: service-ia-python/Dockerfile
+# Fichier: service-ia-python/training.Dockerfile
 
-# Étape 1: Partir d'une image Python officielle et légère
-FROM python:3.10-slim
+# ÉTAPE 1: Utiliser une image de base NVIDIA qui inclut les outils CUDA
+# C'est l'étape la plus importante pour la compatibilité GPU.
+FROM nvidia/cuda:12.1.0-base-ubuntu22.04
 
-# Étape 2: Définir le répertoire de travail à l'intérieur du conteneur
+# ÉTAPE 2: Installer les dépendances système comme Python et Git
+# On ajoute git pour résoudre l'avertissement dans vos logs.
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# ÉTAPE 3: Copier et installer vos requirements Python
 WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Étape 3: Copier le fichier des dépendances
-COPY requirements.txt requirements.txt
-
-# Étape 4: Installer les dépendances
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Étape 5: Copier le code source de l'application (le dossier 'app')
-COPY ./app /app/app
-
-# Étape 6: Exposer le port sur lequel l'API va tourner
-EXPOSE 8000
-
-# Étape 7: La commande pour lancer l'API au démarrage du conteneur
-# Note: On utilise --host 0.0.0.0 pour rendre le serveur accessible depuis l'extérieur du conteneur
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# ÉTAPE 4: Copier le reste de votre code
+COPY . .
