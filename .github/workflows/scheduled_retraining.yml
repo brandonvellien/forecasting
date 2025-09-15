@@ -1,11 +1,10 @@
-# Fichier: .github/workflows/scheduled_retraining.yml efrr
-
+# Fichier: .github/workflows/scheduled_retraining.yml (Version Corrigée)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
   schedule:
-    - cron: '0 2 1 * *' # Tous les 1ers du mois à 2h du matin
-  workflow_dispatch: # Permet un lancement manuel
+    - cron: '0 2 1 * *'
+  workflow_dispatch:
     inputs:
       category_id:
         description: "ID du modèle à entraîner"
@@ -28,11 +27,22 @@ jobs:
       - name: Mise en place de gcloud CLI
         uses: 'google-github-actions/setup-gcloud@v2'
 
+      - name: Configurer Docker pour Google Artifact Registry
+        # Remplacez 'europe-west1' par votre région si elle est différente
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev
+
+      - name: Build et Push de l'image d'entraînement
+        run: |
+          IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
+          docker build -t $IMAGE_URI -f service-ia-python/training.Dockerfile ./service-ia-python
+          docker push $IMAGE_URI
+
       - name: Lancer le job d'entraînement sur Vertex AI
         run: |
+          IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
           gcloud ai custom-jobs create \
             --region=us-east1 \
             --display-name="training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}" \
-            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=gcr.io/${{ secrets.GCP_PROJECT_ID }}/sales-forecasting-trainer \
+            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=$IMAGE_URI \
             --args=--category,${{ github.event.inputs.category_id }} \
-            --env-vars=MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
+            --set-env-vars="MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
