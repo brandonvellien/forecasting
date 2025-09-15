@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et correcte)
+# Fichier: .github/workflows/scheduled_retraining.yml (Version finale avec la bonne région)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
@@ -40,13 +40,10 @@ jobs:
         run: |
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
           
-          # Gestion de la valeur par défaut pour les lancements programmés
           CATEGORY_ID="${{ github.event.inputs.category_id || 'ligne1_category1_01' }}"
           
-          # Remplacer les underscores par des tirets pour la conformité du nom
           JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
           
-          # On crée le fichier de configuration avec la structure correcte (sans "jobSpec:")
           cat <<EOF > config.yaml
           workerPoolSpecs:
           - machineSpec:
@@ -64,13 +61,12 @@ jobs:
                 value: "${{ secrets.MLFLOW_TRACKING_URI }}"
           EOF
           
-          # Étape de débogage pour vérifier le contenu du fichier
           echo "--- Contenu de config.yaml ---"
           cat config.yaml
           echo "-----------------------------"
           
-          # On lance le job en passant le display-name en argument
+          # On lance le job dans la région où les quotas sont probablement disponibles
           gcloud ai custom-jobs create \
-            --region=us-east1 \
+            --region=europe-west1 \
             --display-name=$JOB_NAME \
             --config=config.yaml
