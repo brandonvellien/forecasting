@@ -1,14 +1,14 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et combinée)
+# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et correcte)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
   schedule:
-    - cron: '0 2 1 * *' # Se lance le premier jour de chaque mois à 2h du matin
+    - cron: '0 2 1 * *'
   workflow_dispatch:
     inputs:
       category_id:
         description: "ID du modèle à entraîner"
-        required: false # On le met à false car on gère la valeur par défaut
+        required: false
         default: 'ligne1_category1_01'
 
 jobs:
@@ -40,36 +40,36 @@ jobs:
         run: |
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
           
-          # Gestion de la valeur par défaut (excellente idée de Claude)
+          # Gestion de la valeur par défaut pour les lancements programmés
           CATEGORY_ID="${{ github.event.inputs.category_id || 'ligne1_category1_01' }}"
           
+          # Remplacer les underscores par des tirets pour la conformité du nom
           JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
           
-          # On crée le fichier de configuration SANS le displayName
+          # On crée le fichier de configuration avec la structure correcte (sans "jobSpec:")
           cat <<EOF > config.yaml
-          jobSpec:
-            workerPoolSpecs:
-            - machineSpec:
-                machineType: n1-standard-4
-                acceleratorType: NVIDIA_TESLA_L4
-                acceleratorCount: 1
-              replicaCount: 1
-              containerSpec:
-                imageUri: $IMAGE_URI
-                args:
-                - --category
-                - $CATEGORY_ID
-                env:
-                - name: MLFLOW_TRACKING_URI
-                  value: "${{ secrets.MLFLOW_TRACKING_URI }}"
+          workerPoolSpecs:
+          - machineSpec:
+              machineType: n1-standard-4
+              acceleratorType: NVIDIA_TESLA_L4
+              acceleratorCount: 1
+            replicaCount: 1
+            containerSpec:
+              imageUri: $IMAGE_URI
+              args:
+              - --category
+              - $CATEGORY_ID
+              env:
+              - name: MLFLOW_TRACKING_URI
+                value: "${{ secrets.MLFLOW_TRACKING_URI }}"
           EOF
           
-          # Étape de débogage (excellente idée de Claude)
+          # Étape de débogage pour vérifier le contenu du fichier
           echo "--- Contenu de config.yaml ---"
           cat config.yaml
           echo "-----------------------------"
           
-          # On lance le job en passant le display-name en argument, comme l'exige gcloud
+          # On lance le job en passant le display-name en argument
           gcloud ai custom-jobs create \
             --region=us-east1 \
             --display-name=$JOB_NAME \
