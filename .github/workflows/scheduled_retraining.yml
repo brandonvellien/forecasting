@@ -1,9 +1,9 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Version Corrigée)
+# Fichier: .github/workflows/scheduled_retraining.yml (Version finale et corrigée)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
   schedule:
-    - cron: '0 2 1 * *'
+    - cron: '0 2 1 * *' # Se lance le premier jour de chaque mois à 2h du matin
   workflow_dispatch:
     inputs:
       category_id:
@@ -39,9 +39,30 @@ jobs:
 
       - name: Lancer le job d'entraînement sur Vertex AI
         run: |
+          # On prépare l'URI de l'image Docker
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
+
+          # On crée le fichier de configuration pour le job Vertex AI
+          cat <<EOF > config.yaml
+          displayName: training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}
+          jobSpec:
+            workerPoolSpecs:
+            - machineSpec:
+                machineType: n1-standard-4
+                acceleratorType: NVIDIA_TESLA_L4
+                acceleratorCount: 1
+              replicaCount: 1
+              containerSpec:
+                imageUri: $IMAGE_URI
+                args:
+                - --category
+                - ${{ github.event.inputs.category_id }}
+                env:
+                - name: MLFLOW_TRACKING_URI
+                  value: "${{ secrets.MLFLOW_TRACKING_URI }}"
+          EOF
+
+          # On lance le job en utilisant le fichier de configuration
           gcloud ai custom-jobs create \
             --region=us-east1 \
-            --display-name="training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}" \
-            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=$IMAGE_URI,container-env-vars="MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" \
-            --args=--category,${{ github.event.inputs.category_id }}
+            --config=config.yaml
