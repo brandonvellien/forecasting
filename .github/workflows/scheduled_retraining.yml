@@ -43,6 +43,5 @@ jobs:
           gcloud ai custom-jobs create \
             --region=us-east1 \
             --display-name="training-job-${{ github.event.inputs.category_id }}-${{ github.run_id }}" \
-            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=$IMAGE_URI \
-            --args=--category,${{ github.event.inputs.category_id }} \
-            --environment-variables="MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}"
+            --worker-pool-spec=machine-type=n1-standard-4,replica-count=1,accelerator-type=NVIDIA_TESLA_L4,accelerator-count=1,container-image-uri=$IMAGE_URI,container-env-vars="MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" \
+            --args=--category,${{ github.event.inputs.category_id }}
