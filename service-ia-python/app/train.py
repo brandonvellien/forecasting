@@ -97,13 +97,19 @@ def train_model(unique_id: str):
 
 # --- Point d'entrée pour l'exécution en ligne de commande ---
 if __name__ == "__main__":
+    import argparse
+    import os # On importe os pour lire les variables d'environnement
+    
+    # On configure l'adresse du serveur MLflow depuis une variable d'environnement
+    # C'est une bonne pratique pour la sécurité dans les workflows automatisés
     mlflow_tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     if mlflow_tracking_uri:
         mlflow.set_tracking_uri(mlflow_tracking_uri)
+        print(f"MLflow est configuré pour communiquer avec : {mlflow_tracking_uri}")
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--category", required=True, help="ID unique de la catégorie à entraîner")
     args = parser.parse_args()
     
     run_id = train_model(args.category)
-    print(f"\n✅ Succès ! Retrouvez cette exécution dans MLflow avec l'ID : {run_id}")
+    print(f"\n✅ Succès ! Retrouvez cette exécution dans l'interface MLflow avec l'ID : {run_id}")
