@@ -3,6 +3,9 @@
 from fastapi import FastAPI, HTTPException
 from .predict import get_prediction
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(
     title="API de Prédiction des Ventes",

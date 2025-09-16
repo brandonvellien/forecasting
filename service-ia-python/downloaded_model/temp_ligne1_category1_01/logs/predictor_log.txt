@@ -1,0 +1,55 @@
+Beginning AutoGluon training...
+AutoGluon will save models to '/app/AutogluonModels/temp_ligne1_category1_01'
+=================== System Info ===================
+AutoGluon Version:  1.4.0
+Python Version:     3.10.12
+Operating System:   Linux
+Platform Machine:   x86_64
+Platform Version:   #1 SMP PREEMPT_DYNAMIC Thu Aug 14 09:00:00 UTC 2025
+CPU Count:          3
+GPU Count:          1
+Memory Avail:       12.50 GB / 14.64 GB (85.4%)
+Disk Space Avail:   64.38 GB / 94.25 GB (68.3%)
+===================================================
+
+Fitting with arguments:
+{'enable_ensemble': True,
+ 'eval_metric': WQL,
+ 'hyperparameters': {'TemporalFusionTransformer': {'context_length': 36,
+                                                   'dropout_rate': 0.1,
+                                                   'early_stopping_patience': 20,
+                                                   'hidden_dim': 64,
+                                                   'max_epochs': 120}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 12,
+ 'quantile_levels': [0.1, 0.5, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'qty_sold',
+ 'verbosity': 2}
+
+Inferred time series frequency: 'W-MON'
+Provided train_data has 106 rows, 1 time series. Median time series length is 106 (min=106, max=106). 
+
+Provided data contains following columns:
+	target: 'qty_sold'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2025-09-16 07:48:47
+Models that will be trained: ['TemporalFusionTransformer']
+Training timeseries model TemporalFusionTransformer. 
+	-0.1296       = Validation score (-WQL)
+	47.01   s     = Training runtime
+	0.02    s     = Validation (prediction) runtime
+Not fitting ensemble as only 1 model was trained.
+Training complete. Models trained: ['TemporalFusionTransformer']
+Total runtime: 47.06 s
+Best model: TemporalFusionTransformer
+Best model score: -0.1296
+Model not specified in predict, will default to the model with the best validation score: TemporalFusionTransformer

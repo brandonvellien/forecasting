@@ -10,3 +10,4 @@ fastapi[all]
 joblib
 #mlflow
 comet_ml
+dotenv
