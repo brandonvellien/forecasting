@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Version finale avec la bonne région)
+# Fichier: .github/workflows/scheduled_retraining.yml (Version finale avec Comet)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
@@ -44,6 +44,7 @@ jobs:
           
           JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
           
+          # On crée le fichier de configuration avec les secrets de Comet
           cat <<EOF > config.yaml
           workerPoolSpecs:
           - machineSpec:
@@ -57,15 +58,19 @@ jobs:
               - --category
               - $CATEGORY_ID
               env:
-              - name: MLFLOW_TRACKING_URI
-                value: "${{ secrets.MLFLOW_TRACKING_URI }}"
+              - name: COMET_API_KEY
+                value: "${{ secrets.COMET_API_KEY }}"
+              - name: COMET_WORKSPACE
+                value: "${{ secrets.COMET_WORKSPACE }}"
+              - name: COMET_PROJECT_NAME
+                value: "${{ secrets.COMET_PROJECT_NAME }}"
           EOF
           
           echo "--- Contenu de config.yaml ---"
           cat config.yaml
           echo "-----------------------------"
           
-          # On lance le job dans la région où les quotas sont probablement disponibles
+          # On lance le job en utilisant la région us-east1 pour une meilleure disponibilité GPU
           gcloud ai custom-jobs create \
             --region=us-east1 \
             --display-name=$JOB_NAME \
