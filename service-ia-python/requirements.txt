@@ -11,3 +11,6 @@ joblib
 #mlflow
 comet_ml
 dotenv
+SQLAlchemy
+psycopg2-binary
+python-dotenv
