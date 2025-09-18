@@ -1,26 +1,32 @@
-# Fichier: service-ia-python/app/config.py
+# Fichier: service-ia-python/app/config.py (Version finale pour Supabase)
 from pathlib import Path
 
-# La racine de notre service Python est le dossier parent de 'app'
-SERVICE_ROOT = Path(__file__).parent.parent 
-
-# On construit les chemins à l'intérieur de notre service
+SERVICE_ROOT = Path(__file__).parent.parent
 MODELS_ROOT = SERVICE_ROOT / "AutogluonModels"
-DATA_ROOT = SERVICE_ROOT / "data"
+# La référence à DATA_ROOT n'est plus nécessaire
 
 # ==============================================================================
-# --- REGISTRE DES MODÈLES CHAMPIONS ---
+# --- REGISTRE DES MODÈLES ---
 # ==============================================================================
 MODELS_CONFIG = {
     "ligne1_category1_01": {
-        "model_path": str(MODELS_ROOT / "ts_TFT_ONLY_category1_01"),
         "category_id_in_file": "category1_01",
-        "data_source": str(DATA_ROOT / "ventes_paris_ligne1_par_categorie.csv"),
-        "transformation": None,
+        "original_target_col": "qty_sold",
         "data_filter_start": 118,
-        "model_type": "univariate",
-        "original_target_col": "qty_sold"
+        # Pour ce modèle, nous n'utilisons aucune donnée externe.
+        "known_covariates": []
     },
-    # --- Ajoutez vos autres modèles champions ici ---
-    # "ligne2_category1_08": { ... },
+    
+    # --- EXEMPLE POUR UN FUTUR MODÈLE UTILISANT DES DONNÉES EXTERNES ---
+    # "ligne2_category1_08": {
+    #     "category_id_in_file": "category1_08",
+    #     "original_target_col": "qty_sold",
+    #     # Pour ce modèle, on spécifie les données à joindre
+    #     "known_covariates": [
+    #         "temperature_mean",
+    #         "precipitation",
+    #         "ipc_clothing_shoes",
+    #         "household_confidence"
+    #     ]
+    # },
 }
