@@ -9,7 +9,7 @@ Platform Version:   #1 SMP PREEMPT_DYNAMIC Thu Aug 14 09:00:00 UTC 2025
 CPU Count:          3
 GPU Count:          1
 Memory Avail:       12.50 GB / 14.64 GB (85.4%)
-Disk Space Avail:   64.38 GB / 94.25 GB (68.3%)
+Disk Space Avail:   64.37 GB / 94.25 GB (68.3%)
 ===================================================
 
 Fitting with arguments:
@@ -41,15 +41,15 @@ AutoGluon will gauge predictive performance using evaluation metric: 'WQL'
 	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
 ===================================================
 
-Starting training. Start time is 2025-09-16 07:48:47
+Starting training. Start time is 2025-09-18 15:33:28
 Models that will be trained: ['TemporalFusionTransformer']
 Training timeseries model TemporalFusionTransformer. 
 	-0.1296       = Validation score (-WQL)
-	47.01   s     = Training runtime
+	45.88   s     = Training runtime
 	0.02    s     = Validation (prediction) runtime
 Not fitting ensemble as only 1 model was trained.
 Training complete. Models trained: ['TemporalFusionTransformer']
-Total runtime: 47.06 s
+Total runtime: 45.93 s
 Best model: TemporalFusionTransformer
 Best model score: -0.1296
 Model not specified in predict, will default to the model with the best validation score: TemporalFusionTransformer

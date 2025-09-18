@@ -1,104 +1,173 @@
-# Fichier: service-ia-python/app/predict.py (Version finale avec le bon chemin de chargement)
+# Fichier: service-ia-python/app/predict.py (Version avec récupération des données depuis Supabase)
 
 import pandas as pd
 import numpy as np
+from sqlalchemy import create_engine
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from .config import MODELS_CONFIG
 import comet_ml.api
 import os
 import shutil
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement (pour les tests en local)
+load_dotenv()
 
 comet_api = comet_ml.api.API()
 
+def get_data_from_supabase(config):
+    """
+    Se connecte à Supabase et récupère les données nécessaires
+    en fonction de la configuration du modèle. (Copié de train.py)
+    """
+    print("--- Connexion à Supabase et récupération des données d'historique ---")
+    
+    db_password = os.environ.get("DB_PASSWORD")
+    db_host = os.environ.get("DB_HOST")
+    db_user = os.environ.get("DB_USER")
+    db_name = os.environ.get("DB_NAME")
+    db_port = os.environ.get("DB_PORT")
+
+    connection_str = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    engine = create_engine(connection_str)
+
+    item_id_to_fetch = config["category_id_in_file"]
+    known_covariates = config.get("known_covariates", [])
+
+    # On construit la requête SQL dynamiquement
+    if not known_covariates:
+        query = f"""
+        SELECT item_id, "timestamp", qty_sold
+        FROM sales
+        WHERE item_id = '{item_id_to_fetch}'
+        ORDER BY "timestamp";
+        """
+    else:
+        select_clauses = "s.item_id, s.\"timestamp\", s.qty_sold"
+        joins = ""
+        if "temperature_mean" in known_covariates or "precipitation" in known_covariates:
+            select_clauses += ", w.temperature_mean, w.precipitation"
+            joins += " LEFT JOIN weather w ON DATE(s.\"timestamp\") = w.date"
+        if "ipc_clothing_shoes" in known_covariates:
+            select_clauses += ", i.ipc_clothing_shoes"
+            joins += " LEFT JOIN ipc i ON DATE_TRUNC('month', s.\"timestamp\")::DATE = i.time_period"
+        if "household_confidence" in known_covariates:
+            select_clauses += ", hc.synthetic_indicator AS household_confidence"
+            joins += " LEFT JOIN household_confidence hc ON DATE_TRUNC('month', s.\"timestamp\")::DATE = hc.time_period"
+        
+        query = f"""
+        SELECT {select_clauses}
+        FROM sales s
+        {joins}
+        WHERE s.item_id = '{item_id_to_fetch}'
+        ORDER BY s."timestamp";
+        """
+
+    df = pd.read_sql(query, engine, parse_dates=['timestamp'])
+    print(f"{len(df)} lignes de données récupérées.")
+    return df
+
 def get_prediction(unique_id: str) -> pd.DataFrame:
     """
-    Génère les prévisions de ventes en téléchargeant et utilisant
-    le dernier modèle depuis le registre de Comet.
+    Génère les prévisions de ventes en téléchargeant le modèle depuis Comet
+    et en récupérant les données d'historique depuis Supabase.
     """
     print(f"--- Début de la prédiction pour '{unique_id}' ---")
     
     config = MODELS_CONFIG[unique_id]
-    path_to_data = config["data_source"]
-    
     output_folder = "downloaded_model"
     path_to_model = ""
 
+    # 1. Télécharger le modèle depuis Comet (inchangé)
     try:
         workspace = os.environ.get("COMET_WORKSPACE")
-        model_name = f"sales-forecast-{unique_id}"
+        model_name = f"sales-forecast-{unique_id.replace('_', '-')}"
         
-        print(f"Téléchargement du modèle '{model_name}' depuis Comet (Workspace: {workspace})...")
+        print(f"Téléchargement du modèle '{model_name}' depuis Comet...")
         
         if os.path.exists(output_folder):
             shutil.rmtree(output_folder)
 
         model_registry_item = comet_api.get_model(workspace=workspace, model_name=model_name)
-        
         latest_version_str = model_registry_item.find_versions()[0]
         print(f"Dernière version trouvée : {latest_version_str}")
 
-        model_registry_item.download(
-            version=latest_version_str, 
-            output_folder=output_folder, 
-            expand=True
-        )
+        model_registry_item.download(version=latest_version_str, output_folder=output_folder, expand=True)
         
-        # <<< CORRECTION FINALE ICI >>>
-        # Le modèle AutoGluon est dans un sous-dossier. Nous devons le trouver.
-        # Le nom du dossier correspond au `local_model_path` dans train.py
         model_subfolder = f"temp_{unique_id}"
         path_to_model = os.path.join(output_folder, model_subfolder)
         
         print(f"Modèle téléchargé. Chemin du prédicteur : {path_to_model}")
 
     except Exception as e:
-        print(f"🛑 Erreur lors du téléchargement du modèle depuis Comet : {e}")
-        print("Tentative de chargement du modèle local comme solution de secours...")
-        path_to_model = config.get("model_path")
-        if not path_to_model or not os.path.exists(path_to_model):
-            print(f"🛑 Aucun modèle local de secours trouvé.")
-            return None
+        print(f"🛑 Erreur lors du téléchargement depuis Comet : {e}")
+        return None
 
-    # --- 3. Charger le modèle ---
+    # 2. Charger le modèle (inchangé)
     try:
         predictor = TimeSeriesPredictor.load(path_to_model)
         print("Modèle AutoGluon chargé avec succès.")
     except Exception as e:
-        print(f"🛑 Erreur lors du chargement du modèle AutoGluon depuis '{path_to_model}': {e}")
+        print(f"🛑 Erreur lors du chargement du modèle AutoGluon : {e}")
         return None
 
-    # --- 4. Préparer les données d'historique (inchangé) ---
-    print("Préparation des données d'historique...")
-    df_ventes = pd.read_csv(path_to_data, parse_dates=['timestamp'])
-    df_cat = df_ventes[df_ventes['item_id'] == config["category_id_in_file"]].copy()
-    donnees_hebdo = df_cat.groupby('item_id').resample('W-MON', on='timestamp', include_groups=False).sum(numeric_only=True).reset_index()
-    donnees_hebdo['item_id'] = config["category_id_in_file"]
+    # 3. Préparer les données d'historique depuis SUPABASE (MODIFIÉ)
+    df_daily = get_data_from_supabase(config)
     
-    if "data_filter_start" in config and config["data_filter_start"] is not None:
+    # Agréger les données à la semaine (comme dans train.py)
+    known_covariates = config.get("known_covariates", [])
+    agg_config = {'item_id': 'first', 'qty_sold': 'sum'}
+    for cov in known_covariates:
+        agg_config[cov] = 'mean'
+    donnees_hebdo = df_daily.set_index('timestamp').resample('W-MON').agg(agg_config).reset_index()
+    
+    donnees_hebdo['item_id'] = donnees_hebdo['item_id'].ffill()
+    donnees_hebdo.dropna(subset=['item_id'], inplace=True)
+
+    for col in known_covariates:
+        donnees_hebdo[col] = donnees_hebdo[col].interpolate()
+    
+    donnees_hebdo['timestamp'] = pd.to_datetime(donnees_hebdo['timestamp']).dt.tz_localize(None)
+    
+    # Appliquer le filtre de date si nécessaire (comme dans train.py)
+    if config.get("data_filter_start") is not None:
         temp_df = TimeSeriesDataFrame(donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
         start_date = temp_df.loc[config["category_id_in_file"]].index[config["data_filter_start"]]
         donnees_hebdo = donnees_hebdo.query("timestamp >= @start_date")
-
-    if config.get("transformation") == "log":
-        donnees_hebdo[predictor.target] = np.log1p(donnees_hebdo[config["original_target_col"]])
-    elif config.get("transformation") == "sqrt":
-        donnees_hebdo[predictor.target] = np.sqrt(donnees_hebdo[config["original_target_col"]])
-    
-    donnees_hebdo.dropna(inplace=True)
-    
+        
     data_history = TimeSeriesDataFrame.from_data_frame(
         donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
 
-    # --- 5. Faire la prédiction et retourner le résultat ---
+    # 4. Faire la prédiction (inchangé)
     print("Génération des prévisions...")
     predictions = predictor.predict(data_history)
-
-    if config.get("transformation") == "log":
-        final_predictions = np.expm1(predictions)
-    elif config.get("transformation") == "sqrt":
-        final_predictions = predictions ** 2
-    else:
-        final_predictions = predictions
+    final_predictions = predictions.clip(lower=0)
 
     print(f"--- Prédiction pour '{unique_id}' terminée. ---")
-    return final_predictions.clip(lower=0)
+    return final_predictions
+
+# ... (tout votre code existant de predict.py reste au-dessus)
+
+# --- AJOUTEZ CE BLOC À LA FIN DU FICHIER ---
+if __name__ == "__main__":
+    import argparse
+
+    # 1. Mettre en place un moyen de passer un argument depuis la ligne de commande
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--category", 
+        default="ligne1_category1_01",  # Valeur par défaut pour faciliter les tests
+        help="ID unique de la catégorie pour laquelle générer une prédiction"
+    )
+    args = parser.parse_args()
+
+    # 2. Appeler la fonction de prédiction et afficher le résultat
+    print(f"Lancement de la prédiction pour la catégorie : {args.category}")
+    predictions_df = get_prediction(args.category)
+    
+    if predictions_df is not None:
+        print("\n--- Prévisions générées ---")
+        print(predictions_df)
+        print("\n✅ Script terminé avec succès.")
+    else:
+        print("\n❌ Le script n'a pas pu générer de prévisions.")
