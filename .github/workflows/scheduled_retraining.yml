@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Corrigé avec Supabase + Comet)
+# Fichier: .github/workflows/scheduled_retraining.yml (Corrigé pour le parsing YAML)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
@@ -41,13 +41,11 @@ jobs:
         run: |
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
           
-          # Utilise l'ID de la catégorie de l'input manuel, ou la valeur par défaut
           CATEGORY_ID="${{ github.event.inputs.category_id || 'ligne1_category1_01' }}"
           
           JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
           
           # Crée le fichier de configuration du job Vertex AI
-          # avec les secrets pour Comet ET Supabase
           cat <<EOF > config.yaml
           workerPoolSpecs:
           - machineSpec:
@@ -61,31 +59,30 @@ jobs:
               - --category
               - $CATEGORY_ID
               env:
-              # --- Variables pour Comet ML ---
+              # --- Variables pour Comet ML (Syntaxe corrigée) ---
               - name: COMET_API_KEY
-                value: "\${{ secrets.COMET_API_KEY }}"
+                value: "${{ secrets.COMET_API_KEY }}"
               - name: COMET_WORKSPACE
-                value: "\${{ secrets.COMET_WORKSPACE }}"
+                value: "${{ secrets.COMET_WORKSPACE }}"
               - name: COMET_PROJECT_NAME
-                value: "\${{ secrets.COMET_PROJECT_NAME }}"
-              # --- Variables pour la connexion à Supabase ---
+                value: "${{ secrets.COMET_PROJECT_NAME }}"
+              # --- Variables pour Supabase (Syntaxe corrigée) ---
               - name: DB_PASSWORD
-                value: "\${{ secrets.DB_PASSWORD }}"
+                value: "${{ secrets.DB_PASSWORD }}"
               - name: DB_HOST
-                value: "\${{ secrets.DB_HOST }}"
+                value: "${{ secrets.DB_HOST }}"
               - name: DB_USER
-                value: "\${{ secrets.DB_USER }}"
+                value: "${{ secrets.DB_USER }}"
               - name: DB_NAME
-                value: "\${{ secrets.DB_NAME }}"
+                value: "${{ secrets.DB_NAME }}"
               - name: DB_PORT
-                value: "\${{ secrets.DB_PORT }}"
+                value: "${{ secrets.DB_PORT }}"
           EOF
           
           echo "--- Contenu de config.yaml ---"
           cat config.yaml
           echo "-----------------------------"
           
-          # Lance le job sur Vertex AI
           gcloud ai custom-jobs create \
             --region=us-east1 \
             --display-name=$JOB_NAME \
