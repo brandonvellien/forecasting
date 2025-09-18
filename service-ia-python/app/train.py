@@ -132,7 +132,8 @@ def train_model(unique_id: str):
         target=config["original_target_col"],
         eval_metric="mean_wQuantileLoss",
         quantile_levels=[0.1, 0.5, 0.9],
-        known_covariates_names=known_covariates
+        known_covariates_names=known_covariates,
+        
     )
     predictor.fit(train_data, hyperparameters={'TemporalFusionTransformer': tft_params})
 

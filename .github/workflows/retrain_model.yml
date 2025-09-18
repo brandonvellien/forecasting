@@ -1,5 +1,5 @@
-# Fichier: .github/workflows/retrain_model.yml (Version Finale et Robuste)
-name: Entraînement des Modèles
+# Fichier: .github/workflows/retrain_model.yml (Corrigé et simplifié)
+name: Entraînement Manuel des Modèles
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
   training:
     runs-on: ubuntu-latest
     
-    # --- AJOUT CRUCIAL : Définir le répertoire de travail ---
+    # Définit le répertoire de travail pour toutes les commandes 'run'
     defaults:
       run:
         working-directory: ./service-ia-python
@@ -29,15 +29,24 @@ jobs:
 
       - name: Installation des dépendances
         run: |
+          python -m pip install --upgrade pip
           pip install "numpy<2.0" protobuf==3.20.3
           pip install -r requirements.txt
       
-      # --- Étape de débogage (très utile) ---
-      - name: Vérifier la structure des fichiers
+      # --- Étape de débogage (optionnelle mais utile) ---
+      - name: Vérifier la structure des fichiers avant l'entraînement
         run: ls -R
-      
-      - name: Lancer l'entraînement
+
+      - name: Lancer l'entraînement du modèle
         env:
-          MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+          # --- Secrets pour la connexion à Supabase ---
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          # --- Secrets pour la connexion à Comet ML ---
+          COMET_API_KEY: ${{ secrets.COMET_API_KEY }}
+          COMET_PROJECT_NAME: ${{ secrets.COMET_PROJECT_NAME }}
         run: |
-          python3 app/train.py --category ${{ github.event.inputs.category_id }}
+          python app/train.py --category ${{ github.event.inputs.category_id }}
