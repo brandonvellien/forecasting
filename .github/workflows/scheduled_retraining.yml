@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/scheduled_retraining.yml (Corrigé pour le parsing YAML)
+# Fichier: .github/workflows/scheduled_retraining.yml (Corrigé pour Vertex AI)
 name: Entraînement Mensuel Automatisé sur Vertex AI
 
 on:
@@ -6,15 +6,14 @@ on:
     # Exécute le workflow le 1er de chaque mois à 2h du matin (UTC)
     - cron: '0 2 1 * *'
   workflow_dispatch:
-    inputs:
-      category_id:
-        description: "ID du modèle à entraîner (par défaut: ligne1_category1_01)"
-        required: false
-        default: 'ligne1_category1_01'
 
 jobs:
   train-on-vertex-ai:
     runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        category_id: ['ligne1_category1_01', 'ligne1_category1_08'] # Ajoutez ici toutes vos catégories
 
     steps:
       - name: Checkout du code
@@ -41,11 +40,10 @@ jobs:
         run: |
           IMAGE_URI=europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/app-images/sales-forecasting-trainer:latest
           
-          CATEGORY_ID="${{ github.event.inputs.category_id || 'ligne1_category1_01' }}"
+          CATEGORY_ID="${{ matrix.category_id }}"
           
           JOB_NAME="training-job-${CATEGORY_ID//_/-}-${{ github.run_id }}"
           
-          # Crée le fichier de configuration du job Vertex AI
           cat <<EOF > config.yaml
           workerPoolSpecs:
           - machineSpec:
@@ -55,18 +53,22 @@ jobs:
             replicaCount: 1
             containerSpec:
               imageUri: $IMAGE_URI
+              # <<< LA CORRECTION EST ICI >>>
+              # On spécifie la commande exacte pour lancer le script en tant que module
+              command:
+              - python
+              - -m
+              - app.train
               args:
               - --category
               - $CATEGORY_ID
               env:
-              # --- Variables pour Comet ML (Syntaxe corrigée) ---
               - name: COMET_API_KEY
                 value: "${{ secrets.COMET_API_KEY }}"
               - name: COMET_WORKSPACE
                 value: "${{ secrets.COMET_WORKSPACE }}"
               - name: COMET_PROJECT_NAME
                 value: "${{ secrets.COMET_PROJECT_NAME }}"
-              # --- Variables pour Supabase (Syntaxe corrigée) ---
               - name: DB_PASSWORD
                 value: "${{ secrets.DB_PASSWORD }}"
               - name: DB_HOST
@@ -78,10 +80,6 @@ jobs:
               - name: DB_PORT
                 value: "${{ secrets.DB_PORT }}"
           EOF
-          
-          echo "--- Contenu de config.yaml ---"
-          cat config.yaml
-          echo "-----------------------------"
           
           gcloud ai custom-jobs create \
             --region=us-east1 \
