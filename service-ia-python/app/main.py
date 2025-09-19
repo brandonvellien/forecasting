@@ -20,7 +20,7 @@ def predict_endpoint(unique_id: str):
     """
     print(f"Demande de prédiction API reçue pour : {unique_id}")
     try:
-        predictions_df = get_prediction(unique_id)
+        predictions_df = get_prediction(unique_id, future_only=True)
         if predictions_df is None:
              raise HTTPException(status_code=500, detail="La prédiction a échoué.")
         

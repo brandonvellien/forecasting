@@ -47,7 +47,7 @@ def get_dynamic_data(config):
     known_covariates = config.get("known_covariates", [])
 
     if "temperature_mean" in known_covariates or "rain" in known_covariates:
-        weather_df = pd.read_sql("SELECT date AS timestamp, temperature_mean, precipitation AS rain FROM weather", engine, parse_dates=['timestamp'])
+        weather_df = pd.read_sql("SELECT date AS timestamp, temperature_mean, precipitation AS rain FROM weather WHERE city = 'PARIS'", engine, parse_dates=['timestamp'])
         weather_df['timestamp'] = weather_df['timestamp'].dt.tz_localize(None)
         meteo_hebdo = weather_df.set_index('timestamp')[['rain', 'temperature_mean']].resample('W-MON').mean().ffill().reset_index()
         donnees_hebdo = pd.merge(donnees_hebdo, meteo_hebdo, on='timestamp', how='left')
