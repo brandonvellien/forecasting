@@ -1,4 +1,4 @@
-# Fichier: service-ia-python/app/predict.py (Version avec récupération des données depuis Supabase)
+# Fichier: service-ia-python/app/predict.py (Version finale gérant les covariables et transformations)
 
 import pandas as pd
 import numpy as np
@@ -18,7 +18,7 @@ comet_api = comet_ml.api.API()
 def get_data_from_supabase(config):
     """
     Se connecte à Supabase et récupère les données nécessaires
-    en fonction de la configuration du modèle. (Copié de train.py)
+    en fonction de la configuration du modèle.
     """
     print("--- Connexion à Supabase et récupération des données d'historique ---")
     
@@ -78,7 +78,7 @@ def get_prediction(unique_id: str) -> pd.DataFrame:
     output_folder = "downloaded_model"
     path_to_model = ""
 
-    # 1. Télécharger le modèle depuis Comet (inchangé)
+    # 1. Télécharger le modèle depuis Comet
     try:
         workspace = os.environ.get("COMET_WORKSPACE")
         model_name = f"sales-forecast-{unique_id.replace('_', '-')}"
@@ -103,7 +103,7 @@ def get_prediction(unique_id: str) -> pd.DataFrame:
         print(f"🛑 Erreur lors du téléchargement depuis Comet : {e}")
         return None
 
-    # 2. Charger le modèle (inchangé)
+    # 2. Charger le modèle
     try:
         predictor = TimeSeriesPredictor.load(path_to_model)
         print("Modèle AutoGluon chargé avec succès.")
@@ -111,11 +111,13 @@ def get_prediction(unique_id: str) -> pd.DataFrame:
         print(f"🛑 Erreur lors du chargement du modèle AutoGluon : {e}")
         return None
 
-    # 3. Préparer les données d'historique depuis SUPABASE (MODIFIÉ)
+    # 3. Préparer les données d'historique et les covariables futures
+    print("Préparation des données d'historique et des covariables futures...")
     df_daily = get_data_from_supabase(config)
     
-    # Agréger les données à la semaine (comme dans train.py)
     known_covariates = config.get("known_covariates", [])
+    
+    # Agréger les données à la semaine
     agg_config = {'item_id': 'first', 'qty_sold': 'sum'}
     for cov in known_covariates:
         agg_config[cov] = 'mean'
@@ -125,43 +127,65 @@ def get_prediction(unique_id: str) -> pd.DataFrame:
     donnees_hebdo.dropna(subset=['item_id'], inplace=True)
 
     for col in known_covariates:
-        donnees_hebdo[col] = donnees_hebdo[col].interpolate()
+        donnees_hebdo[col] = donnees_hebdo[col].interpolate().bfill()
     
     donnees_hebdo['timestamp'] = pd.to_datetime(donnees_hebdo['timestamp']).dt.tz_localize(None)
-    
-    # Appliquer le filtre de date si nécessaire (comme dans train.py)
+
+    # Appliquer la transformation si nécessaire
+    if config.get("transformation") == "log":
+        print(f"Application de la transformation logarithmique sur '{predictor.target}'.")
+        donnees_hebdo[predictor.target] = np.log1p(donnees_hebdo[config["original_target_col"]])
+
+    # Appliquer le filtre de date
     if config.get("data_filter_start") is not None:
-        temp_df = TimeSeriesDataFrame(donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
-        start_date = temp_df.loc[config["category_id_in_file"]].index[config["data_filter_start"]]
+        temp_ts_df = TimeSeriesDataFrame(donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
+        start_date = temp_ts_df.loc[config["category_id_in_file"]].index[config["data_filter_start"]]
         donnees_hebdo = donnees_hebdo.query("timestamp >= @start_date")
         
-    data_history = TimeSeriesDataFrame.from_data_frame(
+    full_data_ts = TimeSeriesDataFrame.from_data_frame(
         donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
+        
+    # Extraire les covariables futures si le modèle en a besoin
+    future_known_covariates = None
+    if known_covariates:
+        print("Extraction des covariables futures pour la prédiction...")
+        future_known_covariates = full_data_ts.tail(predictor.prediction_length)[known_covariates]
+        
+    # Les données d'historique sont toutes les données disponibles
+    data_history = full_data_ts
 
-    # 4. Faire la prédiction (inchangé)
+    # 4. Faire la prédiction
     print("Génération des prévisions...")
-    predictions = predictor.predict(data_history)
-    final_predictions = predictions.clip(lower=0)
+    predictions = predictor.predict(
+        data_history, 
+        known_covariates=future_known_covariates
+    )
 
+    # Gérer la retransformation si nécessaire
+    if config.get("transformation") == "log":
+        print("Application de la retransformation exponentielle.")
+        final_predictions = np.expm1(predictions)
+    else:
+        final_predictions = predictions
+
+    final_predictions = final_predictions.clip(lower=0)
+    
     print(f"--- Prédiction pour '{unique_id}' terminée. ---")
     return final_predictions
 
-# ... (tout votre code existant de predict.py reste au-dessus)
 
-# --- AJOUTEZ CE BLOC À LA FIN DU FICHIER ---
+# --- Point d'entrée pour les tests en local ---
 if __name__ == "__main__":
     import argparse
 
-    # 1. Mettre en place un moyen de passer un argument depuis la ligne de commande
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--category", 
-        default="ligne1_category1_01",  # Valeur par défaut pour faciliter les tests
+        default="ligne1_category1_01",
         help="ID unique de la catégorie pour laquelle générer une prédiction"
     )
     args = parser.parse_args()
 
-    # 2. Appeler la fonction de prédiction et afficher le résultat
     print(f"Lancement de la prédiction pour la catégorie : {args.category}")
     predictions_df = get_prediction(args.category)
     

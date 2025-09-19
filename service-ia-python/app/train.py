@@ -1,6 +1,7 @@
-# Fichier: service-ia-python/app/train.py (Version finale, avec filtre corrigé)
+# Fichier: service-ia-python/app/train.py (Version finale, logique Workbench 100% répliquée)
 
 import pandas as pd
+import numpy as np
 from sqlalchemy import create_engine
 import os
 import argparse
@@ -8,120 +9,101 @@ from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from sklearn.metrics import mean_absolute_error
 import comet_ml
 from dotenv import load_dotenv
-from config import MODELS_CONFIG
+from .config import MODELS_CONFIG
 
-# Charger les variables d'environnement
 load_dotenv()
+engine = None
 
-def get_data_from_supabase(config):
+def init_db_engine():
+    """Initialise la connexion à la base de données."""
+    global engine
+    if engine is None:
+        db_password = os.environ.get("DB_PASSWORD")
+        db_host = os.environ.get("DB_HOST")
+        db_user = os.environ.get("DB_USER")
+        db_name = os.environ.get("DB_NAME")
+        db_port = os.environ.get("DB_PORT")
+        connection_str = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+        engine = create_engine(connection_str)
+
+def get_dynamic_data(config):
     """
-    Se connecte à Supabase et récupère les données nécessaires
-    en fonction de la configuration du modèle.
+    Récupère et prépare les données depuis Supabase en suivant
+    strictement la logique du script Workbench.
     """
-    print("--- Connexion à Supabase et récupération des données ---")
+    print("--- Préparation des données depuis Supabase (Logique Workbench) ---")
+    init_db_engine()
     
-    db_password = os.environ.get("DB_PASSWORD")
-    db_host = os.environ.get("DB_HOST")
-    db_user = os.environ.get("DB_USER")
-    db_name = os.environ.get("DB_NAME")
-    db_port = os.environ.get("DB_PORT")
-
-    connection_str = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-    engine = create_engine(connection_str)
-
     item_id_to_fetch = config["category_id_in_file"]
+    
+    # --- 1. Ventes (Logique Workbench) ---
+    sql_query = f"SELECT item_id, \"timestamp\", qty_sold FROM sales WHERE item_id = '{item_id_to_fetch}'"
+    sales_df = pd.read_sql(sql_query, engine, parse_dates=['timestamp'])
+    sales_df['timestamp'] = sales_df['timestamp'].dt.tz_localize(None)
+    df_cat = sales_df[sales_df['item_id'] == item_id_to_fetch].copy()
+    donnees_hebdo = df_cat.groupby('item_id').resample('W-MON', on='timestamp').sum(numeric_only=True).reset_index()
+
+    # --- 2. Données externes (traitées séparément AVANT la fusion) ---
     known_covariates = config.get("known_covariates", [])
 
-    # On construit la requête SQL dynamiquement
-    if not known_covariates:
-        # Cas simple : on ne prend que les ventes
-        query = f"""
-        SELECT item_id, "timestamp", qty_sold
-        FROM sales
-        WHERE item_id = '{item_id_to_fetch}'
-        ORDER BY "timestamp";
-        """
-        print("Requête simple (ventes uniquement)...")
-    else:
-        # Cas complexe : on joint les données externes
-        select_clauses = "s.item_id, s.\"timestamp\", s.qty_sold"
-        joins = ""
-        if "temperature_mean" in known_covariates or "precipitation" in known_covariates:
-            select_clauses += ", w.temperature_mean, w.precipitation"
-            joins += " LEFT JOIN weather w ON DATE(s.\"timestamp\") = w.date"
-        if "ipc_clothing_shoes" in known_covariates:
-            select_clauses += ", i.ipc_clothing_shoes"
-            joins += " LEFT JOIN ipc i ON DATE_TRUNC('month', s.\"timestamp\")::DATE = i.time_period"
-        if "household_confidence" in known_covariates:
-            select_clauses += ", hc.synthetic_indicator AS household_confidence"
-            joins += " LEFT JOIN household_confidence hc ON DATE_TRUNC('month', s.\"timestamp\")::DATE = hc.time_period"
-        
-        query = f"""
-        SELECT {select_clauses}
-        FROM sales s
-        {joins}
-        WHERE s.item_id = '{item_id_to_fetch}'
-        ORDER BY s."timestamp";
-        """
-        print("Requête complexe (avec jointures)...")
+    if "temperature_mean" in known_covariates or "rain" in known_covariates:
+        weather_df = pd.read_sql("SELECT date AS timestamp, temperature_mean, precipitation AS rain FROM weather", engine, parse_dates=['timestamp'])
+        weather_df['timestamp'] = weather_df['timestamp'].dt.tz_localize(None)
+        meteo_hebdo = weather_df.set_index('timestamp')[['rain', 'temperature_mean']].resample('W-MON').mean().ffill().reset_index()
+        donnees_hebdo = pd.merge(donnees_hebdo, meteo_hebdo, on='timestamp', how='left')
 
-    df = pd.read_sql(query, engine, parse_dates=['timestamp'])
-    print(f"{len(df)} lignes de données récupérées.")
-    return df
+    if "ipc" in known_covariates:
+        ipc_df = pd.read_sql("SELECT time_period AS timestamp, ipc_clothing_shoes AS ipc FROM ipc", engine, parse_dates=['timestamp'])
+        ipc_df['timestamp'] = ipc_df['timestamp'].dt.tz_localize(None)
+        ipc_hebdo = ipc_df.set_index('timestamp').resample('W-MON').mean().ffill().reset_index()
+        donnees_hebdo = pd.merge(donnees_hebdo, ipc_hebdo, on='timestamp', how='left')
+        
+    if "moral_menages" in known_covariates:
+        mdm_df = pd.read_sql("SELECT time_period AS timestamp, synthetic_indicator AS moral_menages FROM household_confidence", engine, parse_dates=['timestamp'])
+        mdm_df['timestamp'] = mdm_df['timestamp'].dt.tz_localize(None)
+        moral_hebdo = mdm_df.set_index('timestamp').resample('W-MON').mean().ffill().reset_index()
+        donnees_hebdo = pd.merge(donnees_hebdo, moral_hebdo, on='timestamp', how='left')
+
+    # --- 3. Nettoyage final (après toutes les fusions) ---
+    donnees_hebdo = donnees_hebdo.ffill().bfill()
+    donnees_hebdo.dropna(inplace=True)
+    
+    return donnees_hebdo
 
 def train_model(unique_id: str):
-    """
-    Entraîne le modèle en utilisant les données de Supabase et le sauvegarde sur Comet.
-    """
+    # Le reste de cette fonction et du script est correct et ne change pas.
     print(f"--- Début de l'entraînement pour {unique_id} ---")
     
-    if unique_id not in MODELS_CONFIG:
-        raise ValueError(f"ID '{unique_id}' non trouvé dans la configuration.")
-    
     config = MODELS_CONFIG[unique_id]
-    known_covariates = config.get("known_covariates", [])
-
+    
     experiment = comet_ml.Experiment(project_name=os.environ.get("COMET_PROJECT_NAME"))
     experiment.set_name(f"Training_TFT_{unique_id}")
     experiment.log_parameters(config)
     
-    # 1. Préparation des données depuis Supabase
-    df_daily = get_data_from_supabase(config)
+    donnees_hebdo = get_dynamic_data(config)
     
-    # Agréger les données à la semaine
-    agg_config = {'item_id': 'first', 'qty_sold': 'sum'}
-    for cov in known_covariates:
-        agg_config[cov] = 'mean'
-    donnees_hebdo = df_daily.set_index('timestamp').resample('W-MON').agg(agg_config).reset_index()
-    
-    donnees_hebdo['item_id'] = donnees_hebdo['item_id'].ffill()
-    donnees_hebdo.dropna(subset=['item_id'], inplace=True)
+    target_col = config["original_target_col"]
+    if config.get("transformation") == "log":
+        target_col = f"{config['original_target_col']}_log"
+        donnees_hebdo[target_col] = np.log1p(donnees_hebdo[config["original_target_col"]])
 
-    for col in known_covariates:
-        donnees_hebdo[col] = donnees_hebdo[col].interpolate()
-    
-    donnees_hebdo['timestamp'] = pd.to_datetime(donnees_hebdo['timestamp']).dt.tz_localize(None)
     data = TimeSeriesDataFrame.from_data_frame(donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
 
-    # <<< CORRECTION FINALE ICI : Le bloc manquant est réintégré >>>
     if config.get("data_filter_start") is not None:
-        filter_start_index = config.get("data_filter_start")
-        print(f"Filtrage des données : conservation des données après l'indice {filter_start_index}.")
-        start_date = data.loc[config["category_id_in_file"]].index[filter_start_index]
+        start_date = data.loc[config["category_id_in_file"]].index[config["data_filter_start"]]
         data = data.query("timestamp >= @start_date")
-        print(f"Nombre de lignes après filtrage : {len(data)}")
-
+        
     prediction_length = 12
     cutoff_date = data.index.get_level_values('timestamp').max() - pd.to_timedelta(prediction_length * 7, unit='D')
     train_data = data[data.index.get_level_values('timestamp') <= cutoff_date]
     test_data = data
     
-    # 2. Entraînement
     print("Lancement de l'entraînement AutoGluon...")
-    tft_params = {
+    default_tft_params = {
         'context_length': prediction_length * 3, 'hidden_dim': 64,
         'dropout_rate': 0.1, 'max_epochs': 120, 'early_stopping_patience': 20
     }
+    tft_params = config.get("hyperparameters", default_tft_params)
     experiment.log_parameters(tft_params)
     
     local_model_path = f"AutogluonModels/temp_{unique_id}"
@@ -129,33 +111,37 @@ def train_model(unique_id: str):
     predictor = TimeSeriesPredictor(
         prediction_length=prediction_length,
         path=local_model_path,
-        target=config["original_target_col"],
+        target=target_col,
         eval_metric="mean_wQuantileLoss",
         quantile_levels=[0.1, 0.5, 0.9],
-        known_covariates_names=known_covariates,
+        known_covariates_names=config.get("known_covariates", []),
         
     )
+    train_data.to_csv("Check")
     predictor.fit(train_data, hyperparameters={'TemporalFusionTransformer': tft_params})
 
-    # 3. Évaluation
     print("Évaluation du modèle...")
+    known_covariates = config.get("known_covariates", [])
     future_known_covariates = test_data.tail(prediction_length)[known_covariates] if known_covariates else None
+
     predictions = predictor.predict(train_data, known_covariates=future_known_covariates)
+    
     y_test = test_data.tail(prediction_length)[config["original_target_col"]]
-    y_pred = predictions['0.5']
-    mae_score = mean_absolute_error(y_test, y_pred)
+    
+    if config.get("transformation") == "log":
+        y_pred = np.expm1(predictions['0.5'])
+    else:
+        y_pred = predictions['0.5']
+    
+    mae_score = mean_absolute_error(y_test, y_pred.clip(0))
     
     print(f"MAE Score: {mae_score}")
     experiment.log_metric("mae", mae_score)
     
-    # 4. Sauvegarde
-    print("Sauvegarde du modèle sur le registre de Comet...")
     experiment.log_model(
         name=f"sales-forecast-{unique_id.replace('_', '-')}",
         file_or_folder=local_model_path,
     )
-
-    print(f"--- Entraînement pour {unique_id} terminé. ---")
     experiment.end()
     return "✅ Succès ! Retrouvez cette exécution sur Comet."
 
