@@ -14,6 +14,7 @@ function App() {
       {/* On utilise le nouveau composant graphique Victory */}
       <VictoryPredictionChart categoryId="ligne1_category1_01" />
       <VictoryPredictionChart categoryId="ligne1_category1_08" />
+      <VictoryPredictionChart categoryId="ligne1_category1_CA" />
 
     </Container>
   );

@@ -1,4 +1,4 @@
-# Fichier: .github/workflows/retrain_model.yml (Corrigé et simplifié)
+# Fichier: .github/workflows/retrain_model.yml (Corrigé pour l'exécution en module)
 name: Entraînement Manuel des Modèles
 
 on:
@@ -13,7 +13,6 @@ jobs:
   training:
     runs-on: ubuntu-latest
     
-    # Définit le répertoire de travail pour toutes les commandes 'run'
     defaults:
       run:
         working-directory: ./service-ia-python
@@ -33,20 +32,16 @@ jobs:
           pip install "numpy<2.0" protobuf==3.20.3
           pip install -r requirements.txt
       
-      # --- Étape de débogage (optionnelle mais utile) ---
-      - name: Vérifier la structure des fichiers avant l'entraînement
-        run: ls -R
-
       - name: Lancer l'entraînement du modèle
         env:
-          # --- Secrets pour la connexion à Supabase ---
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_PORT: ${{ secrets.DB_PORT }}
-          # --- Secrets pour la connexion à Comet ML ---
           COMET_API_KEY: ${{ secrets.COMET_API_KEY }}
           COMET_PROJECT_NAME: ${{ secrets.COMET_PROJECT_NAME }}
         run: |
-          python app/train.py --category ${{ github.event.inputs.category_id }}
+          # <<< LA CORRECTION EST ICI >>>
+          # On lance le script en tant que module pour que les imports fonctionnent.
+          python -m app.train --category ${{ github.event.inputs.category_id }}

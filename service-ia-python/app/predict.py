@@ -87,7 +87,25 @@ def get_prediction(unique_id: str, future_only: bool = False) -> pd.DataFrame:
             latest_version_str = model_registry_item.find_versions()[0]
             model_registry_item.download(version=latest_version_str, output_folder=temp_output_folder, expand=True)
             
-            path_to_model = os.path.join(temp_output_folder, f"temp_{unique_id}")
+            # <<< LA CORRECTION EST ICI >>>
+            # On cherche le dossier du modèle dynamiquement au lieu de deviner son nom
+            path_to_model = temp_output_folder
+            # Si un sous-dossier 'temp_...' existe, on l'utilise
+            potential_subfolder = os.path.join(temp_output_folder, f"temp_{unique_id}")
+            if os.path.isdir(potential_subfolder):
+                 path_to_model = potential_subfolder
+            else:
+                # Sinon, on cherche le premier dossier qui contient un 'predictor.pkl'
+                found = False
+                for root, dirs, files in os.walk(temp_output_folder):
+                    if "predictor.pkl" in files:
+                        path_to_model = root
+                        found = True
+                        break
+                if not found:
+                    raise FileNotFoundError("Impossible de trouver 'predictor.pkl' dans le modèle téléchargé.")
+
+            print(f"Chemin du modèle trouvé : {path_to_model}")
             predictor = TimeSeriesPredictor.load(path_to_model)
             print("Modèle AutoGluon chargé avec succès.")
 
