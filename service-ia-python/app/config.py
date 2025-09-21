@@ -35,19 +35,27 @@ MODELS_CONFIG = {
             'max_epochs': 80,
             'early_stopping_patience': 15
         }
+    
+    
         
+    },
+      "ligne1_category1_CA": {
+        "category_id_in_file": "category1_CA",
+        "original_target_col": "qty_sold",
+        "transformation": "log",
+        "data_filter_start": 35,
+        "known_covariates": [],  # Aucune variable externe
+        "time_limit": 600,       # Limite de temps pour l'entraînement
+        # Hyperparamètres spécifiques pour le modèle TFT
+        "hyperparameters": {
+            'context_length': 36,
+            'hidden_dim': 64,
+            'num_heads': 4,
+            'dropout_rate': 0.2,
+            'lr': 0.001,
+            'max_epochs': 130,
+            'early_stopping_patience': 15
+        }
     }
     
-    # --- EXEMPLE POUR UN FUTUR MODÈLE UTILISANT DES DONNÉES EXTERNES ---
-    # "ligne2_category1_08": {
-    #     "category_id_in_file": "category1_08",
-    #     "original_target_col": "qty_sold",
-    #     # Pour ce modèle, on spécifie les données à joindre
-    #     "known_covariates": [
-    #         "temperature_mean",
-    #         "precipitation",
-    #         "ipc_clothing_shoes",
-    #         "household_confidence"
-    #     ]
-    # },
 }

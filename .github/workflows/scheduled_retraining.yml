@@ -13,7 +13,7 @@ jobs:
     
     strategy:
       matrix:
-        category_id: ['ligne1_category1_01', 'ligne1_category1_08'] # Ajoutez ici toutes vos catégories
+        category_id: ['ligne1_category1_01', 'ligne1_category1_08', 'ligne1_category1_CA'] # Ajoutez ici toutes vos catégories
 
     steps:
       - name: Checkout du code
