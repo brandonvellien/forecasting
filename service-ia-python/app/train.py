@@ -1,4 +1,4 @@
-# Fichier: service-ia-python/app/train.py (Version finale unifiée et stable)
+# Fichier: service-ia-python/app/train.py (Version finale qui respecte la configuration)
 
 import pandas as pd
 import numpy as np
@@ -120,14 +120,38 @@ def train_model(unique_id: str):
         path=local_model_path,
         target=target_col,
         eval_metric="mean_wQuantileLoss",
+        quantile_levels=[0.1, 0.5, 0.9],  # <-- Niveaux de quantiles fixes pour tous
         known_covariates_names=config.get("known_covariates", [])
     )
     
-    predictor.fit(train_data, presets="medium_quality", time_limit=300)
+    # <<< LA CORRECTION EST ICI >>>
+    if "hyperparameters" in config:
+        # Si des hyperparamètres sont définis, on entraîne un seul modèle
+        hyperparams = config["hyperparameters"].copy()
+        model_to_train = hyperparams.pop("model")
+        print(f"Entraînement du modèle unique : {model_to_train}")
+        predictor.fit(
+            train_data,
+            hyperparameters={model_to_train: hyperparams},
+            # On passe les covariables ici aussi pour l'entraînement
+            known_covariates=train_data[config.get("known_covariates", [])]
+        )
+    else:
+        # Sinon, on utilise le mode par défaut avec presets
+        presets = config.get("presets", "medium_quality")
+        time_limit = config.get("time_limit", 300)
+        print(f"Entraînement par défaut avec presets='{presets}'")
+        predictor.fit(
+            train_data,
+            presets=presets,
+            time_limit=time_limit
+        )
 
     # === ÉTAPE 3: ÉVALUATION ET SAUVEGARDE ===
     print("--- 4. Évaluation du modèle ---")
-    predictions = predictor.predict(train_data, known_covariates=train_data.tail(prediction_length)[config.get("known_covariates", [])])
+    # On prépare les covariables futures pour l'évaluation
+    future_known_covariates = train_data.tail(prediction_length)[config.get("known_covariates", [])]
+    predictions = predictor.predict(train_data, known_covariates=future_known_covariates)
     
     y_test = test_data.tail(prediction_length)[config["original_target_col"]]
     y_pred = predictions['0.5']
