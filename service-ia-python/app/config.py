@@ -56,6 +56,29 @@ MODELS_CONFIG = {
             'max_epochs': 130,
             'early_stopping_patience': 15
         }
+    },
+
+    "ligne2_category1_08": {
+        "source_table": "sales_product_line_2",
+        "category_id_in_file": "category1_08",
+        "original_target_col": "qty_sold",
+        "transformation": "log",
+        "training_start_date": "2021-02-01",
+        "feature_engineering": {
+            "lags": [1],
+            "rolling_means": [4]
+        },
+        "hyperparameters": {
+            "model": "PatchTST",
+            'context_length': 48, # 12 * 4
+            'patch_len': 8,
+            'stride': 4,
+            'd_model': 64,
+            'nhead': 8,
+            'num_encoder_layers': 3,
+            'max_epochs': 100,
+            'early_stopping_patience': 15
+        }
     }
     
 }
