@@ -15,6 +15,7 @@ function App() {
       <VictoryPredictionChart categoryId="ligne1_category1_01" />
       <VictoryPredictionChart categoryId="ligne1_category1_08" />
       <VictoryPredictionChart categoryId="ligne1_category1_CA" />
+      <VictoryPredictionChart categoryId="ligne2_category1_08" />
 
     </Container>
   );
