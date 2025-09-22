@@ -8,46 +8,42 @@ MODELS_ROOT = SERVICE_ROOT / "AutogluonModels"
 # ==============================================================================
 # --- REGISTRE DES MODÈLES ---
 # ==============================================================================
+# Fichier: service-ia-python/app/config.py (Version finale corrigée et complète)
+
 MODELS_CONFIG = {
     "ligne1_category1_01": {
+        "source_table": "sales",  # <-- CORRECTION AJOUTÉE
         "category_id_in_file": "category1_01",
         "original_target_col": "qty_sold",
-        "data_filter_start": 118,
-        # Pour ce modèle, nous n'utilisons aucune donnée externe.
-        "known_covariates": []
+        "transformation": None,
+        "known_covariates": [],
     },
-
     "ligne1_category1_08": {
+        "source_table": "sales",  # <-- CORRECTION AJOUTÉE
         "category_id_in_file": "category1_08",
         "original_target_col": "qty_sold",
+        "transformation": "log",
         "data_filter_start": 52,
-        "transformation": "log",  # <-- NOUVEAU: Spécifie la transformation log
-        "known_covariates": [     # <-- NOUVEAU: Liste des données externes
-            "temperature_mean",
-            "rain",
-            "ipc",
-            "moral_menages"
-        ],
+        "known_covariates": ["temperature_mean", "rain", "ipc", "moral_menages"],
         "hyperparameters": {
+            'model': 'TemporalFusionTransformer',
             'context_length': 36,
             'hidden_dim': 64,
             'dropout_rate': 0.2,
             'max_epochs': 80,
             'early_stopping_patience': 15
         }
-    
-    
-        
     },
-      "ligne1_category1_CA": {
+    "ligne1_category1_CA": {
+        "source_table": "sales",  # <-- CORRECTION AJOUTÉE
         "category_id_in_file": "category1_CA",
         "original_target_col": "qty_sold",
         "transformation": "log",
         "data_filter_start": 35,
-        "known_covariates": [],  # Aucune variable externe
-        "time_limit": 600,       # Limite de temps pour l'entraînement
-        # Hyperparamètres spécifiques pour le modèle TFT
+        "known_covariates": [],
+        "time_limit": 600,
         "hyperparameters": {
+            'model': 'TemporalFusionTransformer',
             'context_length': 36,
             'hidden_dim': 64,
             'num_heads': 4,
@@ -57,7 +53,6 @@ MODELS_CONFIG = {
             'early_stopping_patience': 15
         }
     },
-
     "ligne2_category1_08": {
         "source_table": "sales_product_line_2",
         "category_id_in_file": "category1_08",
@@ -70,7 +65,7 @@ MODELS_CONFIG = {
         },
         "hyperparameters": {
             "model": "PatchTST",
-            'context_length': 48, # 12 * 4
+            'context_length': 48,
             'patch_len': 8,
             'stride': 4,
             'd_model': 64,
@@ -80,5 +75,4 @@ MODELS_CONFIG = {
             'early_stopping_patience': 15
         }
     }
-    
 }
