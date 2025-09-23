@@ -1,4 +1,4 @@
-# Fichier: service-ia-python/app/train.py (Version finale qui respecte la configuration)
+# Fichier: service-ia-python/app/train.py (Version finale avec correction de l'évaluation)
 
 import pandas as pd
 import numpy as np
@@ -105,6 +105,12 @@ def train_model(unique_id: str):
         donnees_hebdo = donnees_hebdo[donnees_hebdo['timestamp'] >= config["training_start_date"]]
 
     data = TimeSeriesDataFrame.from_data_frame(donnees_hebdo, id_column="item_id", timestamp_column="timestamp")
+
+    if config.get("data_filter_start") is not None:
+        print(f"Filtrage des données : conservation des données après l'indice {config['data_filter_start']}.")
+        start_date = data.loc[config["category_id_in_file"]].index[config["data_filter_start"]]
+        data = data.query("timestamp >= @start_date")
+
     print("✅ Données prêtes pour l'entraînement.")
 
     # === ÉTAPE 2: ENTRAÎNEMENT DU MODÈLE ===
@@ -120,38 +126,36 @@ def train_model(unique_id: str):
         path=local_model_path,
         target=target_col,
         eval_metric="mean_wQuantileLoss",
-        quantile_levels=[0.1, 0.5, 0.9],  # <-- Niveaux de quantiles fixes pour tous
+        quantile_levels=[0.1, 0.5, 0.9],
         known_covariates_names=config.get("known_covariates", [])
     )
     
-    # <<< LA CORRECTION EST ICI >>>
     if "hyperparameters" in config:
-        # Si des hyperparamètres sont définis, on entraîne un seul modèle
         hyperparams = config["hyperparameters"].copy()
         model_to_train = hyperparams.pop("model")
-        print(f"Entraînement du modèle unique : {model_to_train}")
+        print(f"Entraînement du modèle unique : {model_to_train} avec les hyperparamètres spécifiés.")
         predictor.fit(
             train_data,
-            hyperparameters={model_to_train: hyperparams},
-            # On passe les covariables ici aussi pour l'entraînement
-            known_covariates=train_data[config.get("known_covariates", [])]
+            hyperparameters={model_to_train: hyperparams}
         )
     else:
-        # Sinon, on utilise le mode par défaut avec presets
-        presets = config.get("presets", "medium_quality")
+        default_models = {"Naive": {}, "SeasonalNaive": {}, "ETS": {}, "Theta": {}}
         time_limit = config.get("time_limit", 300)
-        print(f"Entraînement par défaut avec presets='{presets}'")
+        print(f"Entraînement avec des modèles simples par défaut (limite de temps : {time_limit}s).")
         predictor.fit(
             train_data,
-            presets=presets,
+            hyperparameters=default_models,
             time_limit=time_limit
         )
 
     # === ÉTAPE 3: ÉVALUATION ET SAUVEGARDE ===
     print("--- 4. Évaluation du modèle ---")
-    # On prépare les covariables futures pour l'évaluation
-    future_known_covariates = train_data.tail(prediction_length)[config.get("known_covariates", [])]
-    predictions = predictor.predict(train_data, known_covariates=future_known_covariates)
+    
+    # <<< LA CORRECTION EST ICI >>>
+    # On fournit à la fonction predict les covariables de TOUT le jeu de données.
+    # AutoGluon se chargera de sélectionner la bonne fenêtre de temps pour l'évaluation.
+    known_covariates_for_evaluation = test_data[config.get("known_covariates", [])]
+    predictions = predictor.predict(train_data, known_covariates=known_covariates_for_evaluation)
     
     y_test = test_data.tail(prediction_length)[config["original_target_col"]]
     y_pred = predictions['0.5']

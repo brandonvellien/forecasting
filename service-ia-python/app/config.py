@@ -12,11 +12,21 @@ MODELS_ROOT = SERVICE_ROOT / "AutogluonModels"
 
 MODELS_CONFIG = {
     "ligne1_category1_01": {
-        "source_table": "sales",  # <-- CORRECTION AJOUTÉE
+        "source_table": "sales",
         "category_id_in_file": "category1_01",
         "original_target_col": "qty_sold",
-        "transformation": None,
+        "transformation": None,  # Pas de transformation log
+        "data_filter_start": 118, # Le filtre de date correct
         "known_covariates": [],
+        # On spécifie le modèle et ses hyperparamètres
+        "hyperparameters": {
+            'model': 'TemporalFusionTransformer',
+            'context_length': 36,      # prediction_length * 3
+            'hidden_dim': 64,
+            'dropout_rate': 0.1,
+            'max_epochs': 120,
+            'early_stopping_patience': 20
+        }
     },
     "ligne1_category1_08": {
         "source_table": "sales",  # <-- CORRECTION AJOUTÉE
@@ -73,6 +83,24 @@ MODELS_CONFIG = {
             'num_encoder_layers': 3,
             'max_epochs': 100,
             'early_stopping_patience': 15
+        }
+    },
+    
+    "ligne2_category1_CA": {
+        "source_table": "sales_product_line_2", # Table pour la ligne de produits 2
+        "category_id_in_file": "category1_CA",
+        "original_target_col": "qty_sold",
+        "transformation": "log",
+        "data_filter_start": 13,
+        "known_covariates": [],
+        "hyperparameters": {
+            "model": "DeepAR", # Le nouveau modèle
+            'context_length': 24, # prediction_length * 2
+            'num_layers': 2,
+            'hidden_size': 40,
+            'dropout_rate': 0.1,
+            'max_epochs': 50,
+            'early_stopping_patience': 10
         }
     }
 }
