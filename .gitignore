@@ -1,5 +1,5 @@
 # Fichier: mon_projet_prevision/.gitignore
-
+node_modules
 ### Général ###
 .env
 *.env
@@ -21,3 +21,6 @@ yarn-error.log
 
 ### AutoGluon ###
 service-ia-python/AutogluonModels/
+
+### Firebase SDK ###
+firebase-admin-key.json
