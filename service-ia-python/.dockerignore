@@ -1,0 +1,25 @@
+# Ignorer les environnements virtuels Python
+.venv
+venv
+env
+
+# Ignorer les caches Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignorer les fichiers de configuration des IDE
+.vscode/
+.idea/
+
+# --- C'EST LA PARTIE LA PLUS IMPORTANTE ---
+# Ignorer les données locales et les modèles
+data/
+
+mlruns/
+
+# Ignorer les fichiers de test et les artefacts
+*.csv
+Check
+Vérification
