@@ -35,8 +35,8 @@ def predict_endpoint(
     unique_id: str = Path(
         ...,
         title="ID Unique du modèle",
-        description="Doit être alphanumérique et peut contenir des tirets et underscores.",
-        regex="^[a-zA-Z0-9_-]+$"
+        description="Doit être alphanumérique et peut contenir des tirets et underscores."
+        
     )
 ):
     """

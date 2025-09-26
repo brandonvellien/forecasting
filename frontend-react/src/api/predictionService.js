@@ -3,8 +3,15 @@
 import axios from 'axios';
 import { auth } from '../firebase';
 
-// On définit l'URL de base de notre API
-const API_ENDPOINT = 'http://localhost:3001/api/predictions';
+// --- MODIFICATION ICI ---
+// On récupère l'URL de base de l'API depuis les variables d'environnement.
+// Si la variable n'existe pas (en local), on utilise http://localhost:3001 par défaut.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
+// On construit l'URL complète de l'endpoint
+const API_ENDPOINT = `${API_BASE_URL}/api/predictions`;
+// --- FIN DE LA MODIFICATION ---
+
 
 // Cette fonction ne change pas
 const getAuthHeaders = async () => {
@@ -20,7 +27,7 @@ const getAuthHeaders = async () => {
     };
 };
 
-// On utilise maintenant une méthode plus propre pour construire la requête
+// Votre logique existante est conservée, elle est parfaite
 export const getPredictions = async (categoryId) => {
   try {
     const authConfig = await getAuthHeaders();

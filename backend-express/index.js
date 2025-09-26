@@ -8,13 +8,16 @@ const helmet = require('helmet'); // <--- 1. IMPORTEZ HELMET
 
 // --- 1. IMPORTS ET CONFIGURATION ---
 const { getPredictionsForCategory } = require('./controllers/predictionController');
-const serviceAccount = require('./firebase-admin-key.json');
+const serviceAccount = require('./secrets/firebase-admin-key.json');
 
 const app = express();
 const PORT = 3001;
+app.set('trust proxy', 1); 
 
 // --- 2. INITIALISATION ET MIDDLEWARES ---
-admin.initializeApp();
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 // --- AJOUT DES MIDDLEWARES DE SÉCURITÉ ---
 // 2. APPLIQUEZ HELMET

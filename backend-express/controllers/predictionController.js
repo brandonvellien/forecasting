@@ -1,18 +1,37 @@
 const axios = require('axios');
-const IA_SERVICE_URL = process.env.IA_SERVICE_URL || "http://127.0.0.1:8000";
+const { GoogleAuth } = require('google-auth-library');
 
-// Voici la fonction qui contient toute la logique métier
+const IA_SERVICE_URL = process.env.IA_SERVICE_URL || "http://127.0.0.1:8000";
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// On prépare l'authentification seulement si on est en production
+const auth = IS_PRODUCTION ? new GoogleAuth() : null;
+let client;
+
 const getPredictionsForCategory = async (req, res) => {
-    // 1. On récupère l'ID de la catégorie depuis la requête
     const { id } = req.query;
     console.log(`[Controller] Demande de prévision pour : ${id}`);
 
-    // 2. On appelle le service d'IA
+    const url = `${IA_SERVICE_URL}/predict/${id}`;
+
     try {
-        const response = await axios.get(`${IA_SERVICE_URL}/predict/${id}`);
+        let response;
+
+        // On choisit la méthode d'appel en fonction de l'environnement
+        if (IS_PRODUCTION) {
+            // --- Logique de PRODUCTION ---
+            if (!client) {
+                client = await auth.getIdTokenClient(IA_SERVICE_URL);
+            }
+            response = await client.request({ url });
+        } else {
+            // --- Logique LOCALE ---
+            response = await axios.get(url);
+        }
+
         const rawData = response.data;
 
-        // 3. On vérifie et transforme les données (le travail du "traducteur")
+        // Le reste du code est identique
         if (!Array.isArray(rawData) || rawData.length === 0) {
             return res.json({ dates: [], predicted_sales_mean: [], predicted_sales_lower: [], predicted_sales_upper: [] });
         }
@@ -23,17 +42,19 @@ const getPredictionsForCategory = async (req, res) => {
             predicted_sales_lower: rawData.map(item => item['0.1']),
             predicted_sales_upper: rawData.map(item => item['0.9'])
         };
-        
-        // 4. On renvoie la réponse JSON parfaitement formatée
+
         res.json(formattedData);
 
     } catch (error) {
-        console.error(`[Controller] Erreur lors de l'appel au service IA pour ${id}:`, error.code);
+        if (error.response) {
+            console.error(`[Controller] Erreur ${error.response.status} du service IA:`, error.response.data);
+        } else {
+            console.error(`[Controller] Erreur de communication avec le service IA pour ${id}:`, error.message);
+        }
         res.status(500).json({ message: "Le service de prédiction est indisponible." });
     }
 };
 
-// On exporte la fonction pour que index.js puisse l'utiliser
 module.exports = {
     getPredictionsForCategory
 };
