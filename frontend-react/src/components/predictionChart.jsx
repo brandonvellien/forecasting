@@ -57,8 +57,8 @@ const PredictionChart = ({ categoryId }) => {
                             type="monotone" 
                             dataKey="intervalle" 
                             stroke={false} 
-                            fill="#8884d8" 
-                            fillOpacity={0.2} 
+                            fill="#912139ff" 
+                            fillOpacity={0.8} 
                             name="Intervalle de confiance 80%" 
                         />
                         

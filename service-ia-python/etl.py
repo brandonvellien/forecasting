@@ -1,4 +1,4 @@
-# Fichier: service-ia-python/etl.py (Version améliorée et dynamique)
+# Fichier: service-ia-python/etl.py 
 
 import pandas as pd
 from sqlalchemy import create_engine, text
