@@ -8,7 +8,13 @@ import '@mantine/core/styles.css';
 import { MantineProvider } from '@mantine/core';
 
 import App from './App.jsx';
+// --- AJOUT POUR LE TEST ---
+// On importe tout ce qui est exporté depuis predictionService.js
+import * as predictionService from './api/predictionService';
+// On l'attache à la fenêtre du navigateur pour pouvoir l'appeler depuis la console
+window.predictionService = predictionService;
 
+// --- FIN DE L'AJOUT ---
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {/* 2. Enveloppez TOUTE votre application avec le MantineProvider */}

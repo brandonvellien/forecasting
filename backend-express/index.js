@@ -1,18 +1,19 @@
-// Fichier: backend-express/index.js (Version finale avec Helmet et Rate Limiting)
+// Fichier: backend-express/index.js (Version corrigée et complète)
 
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
 const rateLimit = require('express-rate-limit');
-const helmet = require('helmet'); // <--- 1. IMPORTEZ HELMET
+const helmet = require('helmet');
 
 // --- 1. IMPORTS ET CONFIGURATION ---
-const { getPredictionsForCategory } = require('./controllers/predictionController');
+// MODIFICATION ICI : On importe les deux fonctions depuis le controller
+const { getPredictionsForCategory, getHistoricalForCategory } = require('./controllers/predictionController');
 const serviceAccount = require('./secrets/firebase-admin-key.json');
 
 const app = express();
 const PORT = 3001;
-app.set('trust proxy', 1); 
+app.set('trust proxy', 1);
 
 // --- 2. INITIALISATION ET MIDDLEWARES ---
 admin.initializeApp({
@@ -20,14 +21,10 @@ admin.initializeApp({
 });
 
 // --- AJOUT DES MIDDLEWARES DE SÉCURITÉ ---
-// 2. APPLIQUEZ HELMET
-// Ajoute plusieurs en-têtes de sécurité, y compris une Content-Security-Policy de base.
-app.use(helmet()); 
-
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// 3. CONFIGUREZ LE LIMITEUR DE DÉBIT (DDoS)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // Fenêtre de 15 minutes
     max: 100, // Limite chaque IP à 100 requêtes par fenêtre
@@ -36,7 +33,6 @@ const limiter = rateLimit({
     message: 'Trop de requêtes envoyées depuis cette IP, veuillez réessayer dans 15 minutes.',
 });
 
-// 4. APPLIQUEZ LE LIMITEUR À TOUTES LES REQUÊTES
 app.use(limiter);
 // --- FIN DES AJOUTS DE SÉCURITÉ ---
 
@@ -60,9 +56,13 @@ const firebaseAuthMiddleware = async (req, res, next) => {
 // --- 3. ROUTAGE ---
 app.get('/api/predictions', firebaseAuthMiddleware, getPredictionsForCategory);
 
+// MODIFICATION ICI : Ajout de la nouvelle route pour l'historique
+app.get('/api/historical', firebaseAuthMiddleware, getHistoricalForCategory);
+
 
 // --- 4. DÉMARRAGE DU SERVEUR ---
 app.listen(PORT, () => {
     console.log(`Serveur Express démarré sur http://localhost:${PORT}`);
-    console.log("Les requêtes sur /api/predictions seront gérées par le predictionController.");
+    // MODIFICATION ICI : Mise à jour du message de log
+    console.log("Les requêtes sur /api/predictions et /api/historical sont gérées par le predictionController.");
 });
