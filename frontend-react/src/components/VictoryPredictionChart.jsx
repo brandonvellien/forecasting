@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Stack, Text, Loader, Center, Alert, Accordion, Table, Group, Switch } from '@mantine/core';
-import { VictoryChart, VictoryLine, VictoryAxis, VictoryTooltip, VictoryVoronoiContainer, VictoryArea, VictoryLabel } from 'victory';
+import { Card, Text, Loader, Center, Alert, Accordion, Table, Group, Switch } from '@mantine/core';
+// AJOUT RGAA : VictoryScatter est importé pour afficher le point actif
+import { VictoryChart, VictoryLine, VictoryAxis, VictoryTooltip, VictoryVoronoiContainer, VictoryArea, VictoryLabel, VictoryScatter } from 'victory';
 import usePredictions from '../hooks/usePredictions';
 import { getHistoricalData } from '../api/predictionService';
 
-const SectionTitle = ({ children }) => (
-    <Text size="lg" weight={700} style={{ fontFamily: 'Greycliff CF, sans-serif' }}>
-        {children}
-    </Text>
-);
-
 const CHART_COLORS = {
     axis: "#000000",
-    predictionLine: "#082644",
+    predictionLine: "#10264CFF",
     confidenceArea: "#757575",
     grid: "#e0e0e050",
     historicalLine: "#381A1A",
@@ -25,6 +20,8 @@ const VictoryPredictionChart = ({ categoryId }) => {
 
     const [historicalData, setHistoricalData] = useState([]);
     const [showHistorical, setShowHistorical] = useState(false);
+    // AJOUT RGAA : État pour suivre le point de données actif via le clavier
+    const [activeIndex, setActiveIndex] = useState(null);
 
     useEffect(() => {
         if (data && data.dates && data.dates.length > 0) {
@@ -38,6 +35,7 @@ const VictoryPredictionChart = ({ categoryId }) => {
         }
     }, [data, categoryId]);
 
+    // ... (les sections loading, error, et no data restent identiques)
     if (loading) {
         return (
             <Card withBorder radius="md" p="xl" mb="xl" shadow="sm">
@@ -77,7 +75,36 @@ const VictoryPredictionChart = ({ categoryId }) => {
     const chartHistorical = historicalData.map(item => ({ x: new Date(item.timestamp), y: item.qty_sold }));
 
     const categoryName = categoryId.replace(/_/g, ' ').replace('category', 'Catégorie ');
-    const chartDescription = `Graphique de prédiction de ventes pour ${categoryName}. La ligne bleue foncée représente la prédiction moyenne de ventes. La zone grise encadrant la ligne représente l'intervalle de confiance (valeurs minimales et maximales prédites). ${showHistorical ? 'La ligne verte pointillée affiche les ventes de l\'année précédente (N-1) pour comparaison. ' : ''}L'axe horizontal affiche les dates, l'axe vertical affiche la quantité vendue.`;
+    const chartDescription = `Graphique de prédiction de ventes pour ${categoryName}. La ligne bleue foncée représente la prédiction moyenne de ventes. La zone grise encadrant la ligne représente l'intervalle de confiance. ${showHistorical ? 'La ligne pointillée affiche les ventes de l\'année précédente (N-1). ' : ''}L'axe horizontal affiche les dates, l'axe vertical affiche la quantité vendue.`;
+
+    // AJOUT RGAA : Fonction pour gérer la navigation au clavier dans le graphique
+    const handleKeyDown = (event) => {
+        if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            setActiveIndex(prevIndex => {
+                const nextIndex = prevIndex === null ? 0 : prevIndex + 1;
+                return nextIndex >= chartDataMean.length ? chartDataMean.length - 1 : nextIndex;
+            });
+        } 
+        else if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            setActiveIndex(prevIndex => {
+                const nextIndex = prevIndex === null ? 0 : prevIndex - 1;
+                return nextIndex < 0 ? 0 : nextIndex;
+            });
+        }
+    };
+
+    // AJOUT RGAA : Préparation des données du point actif pour l'affichage textuel
+    let activePointData = null;
+    if (activeIndex !== null && data && data.dates[activeIndex]) {
+        activePointData = {
+            date: new Date(data.dates[activeIndex]).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            lower: Math.round(data.predicted_sales_lower[activeIndex]),
+            mean: Math.round(data.predicted_sales_mean[activeIndex]),
+            upper: Math.round(data.predicted_sales_upper[activeIndex]),
+        };
+    }
 
     const tableRows = data.dates.map((date, index) => (
         <tr key={date}>
@@ -99,23 +126,27 @@ const VictoryPredictionChart = ({ categoryId }) => {
                     checked={showHistorical}
                     onChange={(event) => setShowHistorical(event.currentTarget.checked)}
                     color="green"
-                    aria-label="Afficher les données de ventes de l'année précédente"
+                    aria-label="Afficher/masquer les données de ventes de l'année précédente"
                     aria-pressed={showHistorical}
                 />
             </Group>
 
-            {/* Description du graphique */}
             <div id="chart-description" style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#f5f5f5', borderLeft: `4px solid ${CHART_COLORS.predictionLine}`, borderRadius: '4px' }} role="doc-subtitle" aria-live="polite">
                 <Text size="sm" style={{ color: '#333', lineHeight: 1.6 }}>
                     {chartDescription}
                 </Text>
             </div>
 
-            <div style={{ userSelect: 'none', position: 'relative' }}>
+            {/* AJOUT RGAA : Le conteneur du graphique est maintenant focusable et gère les événements clavier */}
+            <div 
+                style={{ userSelect: 'none', position: 'relative', outline: 'none' }}
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
+                role="application"
+                aria-label={`Graphique interactif. Une fois le focus sur cet élément, utilisez les flèches gauche et droite pour naviguer entre les points de données.`}
+            >
                 <VictoryChart
-                    width={900}
-                    height={400}
-                    scale={{ x: "time" }}
+                    width={900} height={400} scale={{ x: "time" }}
                     padding={{ top: 50, bottom: 60, left: 60, right: 30 }}
                     role="img"
                     aria-label={`Graphique de prédiction de ventes - ${categoryName}`}
@@ -124,120 +155,66 @@ const VictoryPredictionChart = ({ categoryId }) => {
                         <VictoryVoronoiContainer
                             labels={({ datum, index }) => {
                                 const dateStr = datum.x.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                                
-                                // Chercher l'index pour récupérer les valeurs basse et haute
                                 const lower = data.predicted_sales_lower[index] !== undefined ? Math.round(data.predicted_sales_lower[index]) : null;
                                 const mean = data.predicted_sales_mean[index] !== undefined ? Math.round(data.predicted_sales_mean[index]) : null;
                                 const upper = data.predicted_sales_upper[index] !== undefined ? Math.round(data.predicted_sales_upper[index]) : null;
                                 
                                 if (lower !== null && mean !== null && upper !== null) {
-                                    return `Date: ${dateStr}\nPrédiction basse: ${lower} unités\nPrédiction moyenne: ${mean} unités\nPrédiction haute: ${upper} unités`;
+                                    return `Date: ${dateStr}\nPrédiction basse: ${lower}\nPrédiction moyenne: ${mean}\nPrédiction haute: ${upper}`;
                                 }
-                                return `Date: ${dateStr}\nVentes: ${Math.round(datum.y)} unités`;
+                                return `Date: ${dateStr}\nVentes: ${Math.round(datum.y)}`;
                             }}
-                            labelComponent={
-                                <VictoryTooltip
-                                    cornerRadius={5}
-                                    flyoutStyle={{ fill: "white", stroke: CHART_COLORS.grid }}
-                                    style={{ fontSize: 12, fill: "#000" }}
-                                />
-                            }
+                            labelComponent={<VictoryTooltip cornerRadius={5} flyoutStyle={{ fill: "white", stroke: CHART_COLORS.grid }} style={{ fontSize: 12, fill: "#000" }} />}
                         />
                     }
                 >
+                    <VictoryLabel text="Quantités vendues" x={60} y={25} textAnchor="middle" style={{ fill: CHART_COLORS.axis, fontWeight: 'bold', fontFamily: "'Greycliff CF', sans-serif", fontSize: 13 }}/>
+                    <VictoryAxis label='Date' tickFormat={(x) => new Date(x).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} tickCount={6} style={{ axis: { stroke: CHART_COLORS.axis, strokeWidth: 2 }, axisLabel: { padding: 30, fill: CHART_COLORS.axis, textAnchor: 'end', fontWeight: 'bold', fontFamily: "'Greycliff CF', sans-serif", fontSize: 13 }, tickLabels: { angle: 0, textAnchor: 'middle', fill: CHART_COLORS.axis, fontSize: 12 }}} />
+                    <VictoryAxis dependentAxis tickFormat={(y) => `${Math.round(y)}`} style={{ axis: { stroke: CHART_COLORS.axis, strokeWidth: 2 }, tickLabels: { fill: CHART_COLORS.axis, fontSize: 12 }, grid: { stroke: CHART_COLORS.grid, strokeWidth: 0.5 }}} />
+                    <VictoryArea data={chartDataConfidence} style={{ data: { fill: CHART_COLORS.confidenceArea, fillOpacity: 0.3 } }} />
+                    <VictoryLine data={chartDataMean} style={{ data: { stroke: CHART_COLORS.predictionLine, strokeWidth: 2.5 } }} animate={{ duration: 1500, onLoad: { duration: 1000 } }} />
+                    {showHistorical && (<VictoryLine data={chartHistorical} style={{ data: { stroke: CHART_COLORS.historicalLine, strokeWidth: 2.5, strokeDasharray: "5, 5" } }} />)}
 
-                    <VictoryLabel 
-                        text="Quantités vendue"
-                        x={60}
-                        y={25}
-                        textAnchor="middle"
-                        style={{ fill: CHART_COLORS.axis, fontWeight: 'bold', fontFamily: "'Greycliff CF', sans-serif", fontSize: 13 }}
-                    />
-                    
-                    <VictoryAxis
-                        label='Date'
-                        tickFormat={(x) => new Date(x).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
-                        tickCount={6}
-                        style={{
-                            axis: { stroke: CHART_COLORS.axis, strokeWidth: 2 },
-                            axisLabel: { padding: 30, fill: CHART_COLORS.axis, textAnchor: 'end', fontWeight: 'bold', fontFamily: "'Greycliff CF', sans-serif", fontSize: 13 },
-                            tickLabels: { angle: 0, textAnchor: 'middle', fill: CHART_COLORS.axis, fontSize: 12 }
-                        }}
-                    />
-                    
-                    <VictoryAxis
-                        dependentAxis
-                        tickFormat={(y) => `${Math.round(y)}`}
-                        style={{
-                            axis: { stroke: CHART_COLORS.axis, strokeWidth: 2 },
-                            tickLabels: { fill: CHART_COLORS.axis, fontSize: 12 },
-                            grid: { stroke: CHART_COLORS.grid, strokeWidth: 0.5 }
-                        }}
-                    />
-                    
-                    <VictoryArea
-                        data={chartDataConfidence}
-                        style={{ data: { fill: CHART_COLORS.confidenceArea, fillOpacity: 0.3 } }}
-                    />
-                    
-                    <VictoryLine
-                        data={chartDataMean}
-                        style={{ data: { stroke: CHART_COLORS.predictionLine, strokeWidth: 2.5 } }}
-                        animate={{ duration: 1500, onLoad: { duration: 1000 } }}
-                    />
-
-                    {showHistorical && (
-                        <VictoryLine
-                            data={chartHistorical}
-                            style={{ data: { stroke: CHART_COLORS.historicalLine, strokeWidth: 2.5, strokeDasharray: "5, 5" } }}
-                        />
+                    {/* AJOUT RGAA : Affiche un point visuel sur le point de données actif au clavier */}
+                    {activeIndex !== null && (
+                        <VictoryScatter data={[chartDataMean[activeIndex]]} style={{ data: { fill: "white", stroke: CHART_COLORS.predictionLine, strokeWidth: 3 }}} size={6} />
                     )}
                 </VictoryChart>
             </div>
 
-            {/* Légende avec ARIA */}
+            {/* AJOUT RGAA : Zone de texte qui affiche les données du point actif et est lue par les lecteurs d'écran */}
+            {activePointData && (
+                <div 
+                    role="status" 
+                    aria-live="polite" 
+                    style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#082644', color: 'white', borderRadius: '8px', textAlign: 'center' }}
+                >
+                    <Text weight={700}>
+                        {`Date : ${activePointData.date} | Prédiction : ${activePointData.mean} unités (entre ${activePointData.lower} et ${activePointData.upper})`}
+                    </Text>
+                </div>
+            )}
+
             <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '2rem', flexWrap: 'wrap' }} role="region" aria-label="Légende du graphique">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div 
-                        style={{ width: '24px', height: '3px', backgroundColor: CHART_COLORS.predictionLine }} 
-                        aria-hidden="true"
-                    ></div>
+                    <div style={{ width: '24px', height: '3px', backgroundColor: CHART_COLORS.predictionLine }} aria-hidden="true"></div>
                     <Text size="sm" component="span">Prédiction moyenne</Text>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div 
-                        style={{ 
-                            width: '24px', 
-                            height: '3px', 
-                            backgroundColor: CHART_COLORS.historicalLine, 
-                            backgroundImage: 'repeating-linear-gradient(90deg, ' + CHART_COLORS.historicalLine + ' 0px, ' + CHART_COLORS.historicalLine + ' 5px, transparent 5px, transparent 10px)' 
-                        }}
-                        aria-hidden="true"
-                    ></div>
+                    <div style={{ width: '24px', height: '3px', backgroundColor: CHART_COLORS.historicalLine, backgroundImage: 'repeating-linear-gradient(90deg, ' + CHART_COLORS.historicalLine + ' 0px, ' + CHART_COLORS.historicalLine + ' 5px, transparent 5px, transparent 10px)' }} aria-hidden="true"></div>
                     <Text size="sm" component="span">Ventes N-1</Text>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div 
-                        style={{ width: '24px', height: '15px', backgroundColor: CHART_COLORS.confidenceArea, opacity: 0.3, border: `1px solid ${CHART_COLORS.confidenceArea}` }}
-                        aria-hidden="true"
-                    ></div>
+                    <div style={{ width: '24px', height: '15px', backgroundColor: CHART_COLORS.confidenceArea, opacity: 0.3, border: `1px solid ${CHART_COLORS.confidenceArea}` }} aria-hidden="true"></div>
                     <Text size="sm" component="span">Intervalle de confiance</Text>
                 </div>
             </div>
 
-            {/* Tableau de données détaillées */}
             <Accordion variant="separated" radius="md" mt="xl">
                 <Accordion.Item value="prediction-data-table">
                     <Accordion.Control>Afficher les données détaillées</Accordion.Control>
                     <Accordion.Panel>
-                        <Table 
-                            captionSide="top" 
-                            highlightOnHover 
-                            withBorder 
-                            withColumnBorders
-                            role="table"
-                            aria-label="Tableau détaillé des prédictions de ventes"
-                        >
+                        <Table captionSide="top" highlightOnHover withBorder withColumnBorders role="table" aria-label="Tableau détaillé des prédictions de ventes">
                             <caption id="table-caption" style={{ fontWeight: 'bold', marginBottom: '1rem', color: '#000', textAlign: 'left' }}>
                                 Prédictions détaillées par semaine pour {categoryName}
                             </caption>
